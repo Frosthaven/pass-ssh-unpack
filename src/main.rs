@@ -229,16 +229,13 @@ fn run() -> Result<()> {
 
         // Generate SSH config
         log("Generating SSH config...");
-        let (primary_count, alias_count, pruned_count) = ssh_manager.write_config()?;
+        let (primary_count, alias_count) = ssh_manager.write_config()?;
 
         log("");
         log(&format!(
             "Done! Generated config has {} hosts and {} aliases.",
             primary_count, alias_count
         ));
-        if pruned_count > 0 {
-            log(&format!("Pruned {} orphaned entries.", pruned_count));
-        }
         log(&format!(
             "SSH config written to: {}",
             ssh_manager.config_path().display()
