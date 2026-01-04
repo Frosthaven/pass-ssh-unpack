@@ -1,5 +1,8 @@
 # pass-ssh-unpack
 
+> [!IMPORTANT]
+> This tool is still in the PROTOTYPE phase. Expect breaking changes.
+
 Extract SSH keys from Proton Pass to local files and generate SSH config.
 
 ## Features
