@@ -124,9 +124,11 @@ impl Default for Config {
 
 impl Config {
     /// Get the default config file path
+    /// Always uses ~/.config for consistency across platforms
     pub fn default_path() -> PathBuf {
-        dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("~/.config"))
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("~"))
+            .join(".config")
             .join("pass-ssh-unpack")
             .join("config.toml")
     }
