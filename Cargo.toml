@@ -1,6 +1,7 @@
 [package]
 name = "pass-ssh-unpack"
-version = "0.1.0"
+version = "0.1.2"
+authors = ["Shane Stanley <shane@thedragon.dev>"]
 edition = "2021"
 description = "Extract SSH keys from Proton Pass to local files and generate SSH config"
 license = "MIT"
@@ -8,6 +9,12 @@ repository = "https://github.com/Frosthaven/pass-ssh-unpack"
 readme = "README.md"
 keywords = ["ssh", "proton-pass", "password-manager", "rclone"]
 categories = ["command-line-utilities"]
+
+[package.metadata.release]
+publish = false
+push = false
+tag = false
+pre-release-commit-message = "chore: release v{{version}}"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

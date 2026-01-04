@@ -1,0 +1,45 @@
+name: Version Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+
+jobs:
+  check-version:
+    name: Check version is bumped
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compare versions
+        run: |
+          # Get version from PR branch
+          PR_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          
+          # Get version from main branch
+          git checkout origin/main -- Cargo.toml
+          MAIN_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          
+          # Restore PR version
+          git checkout HEAD -- Cargo.toml
+          
+          echo "Main version: $MAIN_VERSION"
+          echo "PR version:   $PR_VERSION"
+          
+          if [ "$PR_VERSION" = "$MAIN_VERSION" ]; then
+            echo ""
+            echo "::error::Version in Cargo.toml ($PR_VERSION) must be bumped before merging to main"
+            echo ""
+            echo "Run 'cargo release patch --execute' (or minor/major) on your branch to bump the version."
+            exit 1
+          fi
+          
+          echo ""
+          echo "Version check passed: $MAIN_VERSION -> $PR_VERSION"

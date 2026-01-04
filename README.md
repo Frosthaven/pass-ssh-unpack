@@ -23,6 +23,12 @@ A utility for unpacking proton's pass-cli ssh keys into usable ssh and rclone co
 
 ## Installation
 
+### From crates.io
+
+```bash
+cargo install pass-ssh-unpack
+```
+
 ### From source
 
 ```bash
