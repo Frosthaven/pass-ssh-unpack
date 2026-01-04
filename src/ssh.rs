@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::config::SyncPublicKey;
 use crate::platform::{self, set_private_permissions};
 use crate::proton_pass::{ProtonPass, SshItem};
 use crate::rclone::RcloneEntry;
@@ -29,11 +30,17 @@ pub struct SshManager {
     new_hosts: HashMap<String, String>,
     full_mode: bool,
     dry_run: bool,
+    sync_public_key: SyncPublicKey,
 }
 
 impl SshManager {
     /// Create a new SSH manager
-    pub fn new(base_dir: &Path, full_mode: bool, dry_run: bool) -> Result<Self> {
+    pub fn new(
+        base_dir: &Path,
+        full_mode: bool,
+        dry_run: bool,
+        sync_public_key: SyncPublicKey,
+    ) -> Result<Self> {
         let config_path = base_dir.join("config");
 
         if !dry_run {
@@ -61,6 +68,7 @@ impl SshManager {
             new_hosts: HashMap::new(),
             full_mode,
             dry_run,
+            sync_public_key,
         })
     }
 
@@ -147,14 +155,21 @@ impl SshManager {
                             safe_title
                         );
 
-                        // Save public key back to Proton Pass if empty
-                        if item.public_key.is_none()
+                        // Determine if we should sync public key to Proton Pass
+                        let pubkey_is_empty = item.public_key.is_none()
                             || item
                                 .public_key
                                 .as_ref()
                                 .map(|s| s.is_empty())
-                                .unwrap_or(true)
-                        {
+                                .unwrap_or(true);
+
+                        let should_sync = match self.sync_public_key {
+                            SyncPublicKey::Never => false,
+                            SyncPublicKey::IfEmpty => pubkey_is_empty,
+                            SyncPublicKey::Always => true,
+                        };
+
+                        if should_sync {
                             match proton_pass.update_item_field(
                                 vault,
                                 &item.title,

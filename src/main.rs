@@ -29,6 +29,7 @@ fn run() -> Result<()> {
     let dry_run = args.dry_run;
 
     // Load or create config
+    let config_path = args.config.clone().unwrap_or_else(Config::default_path);
     let config = Config::load_or_create(&args.config)?;
 
     // Helper for logging
@@ -37,6 +38,22 @@ fn run() -> Result<()> {
             println!("{}", msg);
         }
     };
+
+    // Check for missing config options and warn user
+    if config_path.exists() {
+        let missing = config::check_missing_options(&config_path);
+        if !missing.is_empty() && !args.quiet {
+            eprintln!(
+                "Warning: Your config is missing new options: {}",
+                missing.join(", ")
+            );
+            eprintln!(
+                "  Consider regenerating with: rm {:?} && pass-ssh-unpack",
+                config_path
+            );
+            eprintln!();
+        }
+    }
 
     if dry_run {
         log("[DRY RUN] No changes will be made");
@@ -59,7 +76,12 @@ fn run() -> Result<()> {
 
     // Setup SSH manager
     let ssh_output_dir = config.expanded_ssh_output_dir();
-    let mut ssh_manager = SshManager::new(&ssh_output_dir, args.full, dry_run)?;
+    let mut ssh_manager = SshManager::new(
+        &ssh_output_dir,
+        args.full,
+        dry_run,
+        config.sync_public_key.clone(),
+    )?;
 
     // Get vaults to process
     let proton_pass = ProtonPass::new();
