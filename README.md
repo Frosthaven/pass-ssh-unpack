@@ -69,8 +69,11 @@ pass-ssh-unpack --vault Personal --item "github/*"
 # Full regeneration (clear and rebuild)
 pass-ssh-unpack --full
 
-# Skip rclone sync
-pass-ssh-unpack --no-rclone
+# Only process SSH keys (skip rclone)
+pass-ssh-unpack --ssh
+
+# Only process rclone remotes (skip SSH)
+pass-ssh-unpack --rclone
 
 # Remove all managed SSH keys and rclone remotes
 pass-ssh-unpack --purge
@@ -84,6 +87,8 @@ pass-ssh-unpack --dry-run
 
 ### CLI Options
 
+CLI options override corresponding config file settings.
+
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--vault <PATTERN>` | `-v` | Vault(s) to process (repeatable, supports wildcards) |
@@ -91,9 +96,14 @@ pass-ssh-unpack --dry-run
 | `--full` | `-f` | Full regeneration (clear config first) |
 | `--dry-run` | | Show what would be done without making changes |
 | `--quiet` | `-q` | Suppress output |
-| `--no-rclone` | | Skip rclone remote sync |
+| `--ssh` | | Only process SSH keys (skip rclone sync) |
+| `--rclone` | | Only process rclone remotes (skip SSH extraction) |
 | `--purge` | | Remove all managed SSH keys and rclone remotes |
 | `--config <PATH>` | `-c` | Custom config file path |
+| `--output-dir <PATH>` | `-o` | Override SSH output directory |
+| `--sync-public-key <MODE>` | | Override public key sync mode (never/if-empty/always) |
+| `--rclone-password-path <PATH>` | | Override rclone password path in Proton Pass |
+| `--always-encrypt` | | Force rclone config encryption after operations |
 | `--help` | `-h` | Show help |
 | `--version` | `-V` | Show version |
 

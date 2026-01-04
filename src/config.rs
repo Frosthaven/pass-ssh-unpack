@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// When to sync public keys back to Proton Pass
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default, ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub enum SyncPublicKey {
     /// Never sync public keys
