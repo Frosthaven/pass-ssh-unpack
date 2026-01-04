@@ -268,10 +268,12 @@ fn check_dependencies() -> Result<()> {
         bail!("pass-cli not found. Install Proton Pass CLI first.");
     }
 
-    // Check if logged in
+    // Check if logged in (with spinner since this can be slow)
+    let spinner = progress::spinner("Checking Proton Pass login...");
     let output = std::process::Command::new("pass-cli")
         .arg("info")
         .output()?;
+    spinner.finish_and_clear();
 
     if !output.status.success() {
         eprintln!("Not logged into Proton Pass. Launching login...");
