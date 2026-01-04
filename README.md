@@ -13,7 +13,7 @@ Extract SSH keys from Proton Pass to local files and generate SSH config.
 
 ## Requirements
 
-- [Proton Pass CLI](https://proton.me/support/pass-cli) (`pass-cli`)
+- [Proton Pass CLI](https://protonpass.github.io/pass-cli/) (`pass-cli`)
 - OpenSSH (`ssh-keygen`)
 - [rclone](https://rclone.org/) (optional, for SFTP remote sync)
 
