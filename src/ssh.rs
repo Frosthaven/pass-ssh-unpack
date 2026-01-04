@@ -292,8 +292,8 @@ impl SshManager {
     }
 
     /// Write the final SSH config file
-    /// Returns (primary_count, alias_count, pruned_count)
-    pub fn write_config(&self) -> Result<(usize, usize, usize)> {
+    /// Returns (primary_count, alias_count)
+    pub fn write_config(&self) -> Result<(usize, usize)> {
         // Merge: new hosts override existing, keep existing if not touched
         let mut final_hosts = if self.full_mode {
             HashMap::new()
@@ -304,24 +304,6 @@ impl SshManager {
         // Override/add new hosts
         for (host, block) in &self.new_hosts {
             final_hosts.insert(host.clone(), block.clone());
-        }
-
-        // Auto-prune: remove entries whose key files don't exist
-        let home_dir = dirs::home_dir().unwrap_or_default();
-        let mut hosts_to_remove = Vec::new();
-
-        for (host, block) in &final_hosts {
-            if let Some(id_file) = Self::extract_identity_file(block) {
-                let expanded = id_file.replace("%d", &home_dir.to_string_lossy());
-                if !Path::new(&expanded).exists() {
-                    hosts_to_remove.push(host.clone());
-                }
-            }
-        }
-
-        let pruned_count = hosts_to_remove.len();
-        for host in hosts_to_remove {
-            final_hosts.remove(&host);
         }
 
         // Write final config (skip in dry run)
@@ -347,7 +329,7 @@ impl SshManager {
             .count();
         let primary_count = total_hosts - alias_count;
 
-        Ok((primary_count, alias_count, pruned_count))
+        Ok((primary_count, alias_count))
     }
 
     /// Parse existing SSH config file into host -> block map
@@ -392,18 +374,5 @@ impl SshManager {
         }
 
         Ok(hosts)
-    }
-
-    /// Extract IdentityFile path from a config block
-    fn extract_identity_file(block: &str) -> Option<String> {
-        for line in block.lines() {
-            if let Some(rest) = line.trim().strip_prefix("IdentityFile") {
-                let path = rest.trim().trim_matches('"').to_string();
-                if !path.is_empty() {
-                    return Some(path);
-                }
-            }
-        }
-        None
     }
 }

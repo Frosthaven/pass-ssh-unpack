@@ -229,16 +229,13 @@ fn run() -> Result<()> {
 
         // Generate SSH config
         log("Generating SSH config...");
-        let (primary_count, alias_count, pruned_count) = ssh_manager.write_config()?;
+        let (primary_count, alias_count) = ssh_manager.write_config()?;
 
         log("");
         log(&format!(
             "Done! Generated config has {} hosts and {} aliases.",
             primary_count, alias_count
         ));
-        if pruned_count > 0 {
-            log(&format!("Pruned {} orphaned entries.", pruned_count));
-        }
         log(&format!(
             "SSH config written to: {}",
             ssh_manager.config_path().display()
@@ -271,10 +268,12 @@ fn check_dependencies() -> Result<()> {
         bail!("pass-cli not found. Install Proton Pass CLI first.");
     }
 
-    // Check if logged in
+    // Check if logged in (with spinner since this can be slow)
+    let spinner = progress::spinner("Checking Proton Pass login...");
     let output = std::process::Command::new("pass-cli")
         .arg("info")
         .output()?;
+    spinner.finish_and_clear();
 
     if !output.status.success() {
         eprintln!("Not logged into Proton Pass. Launching login...");

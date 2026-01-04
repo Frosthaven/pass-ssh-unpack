@@ -491,79 +491,6 @@ pub fn sync_remotes(
         bar.finish_and_clear();
     }
 
-    // Auto-prune orphaned remotes (managed remotes with missing key files)
-    let mut pruned_names: Vec<String> = Vec::new();
-    {
-        // Re-parse the current state
-        let updated_config = if let Some(ref cfg) = in_memory_config {
-            parse_ini_config(cfg.content())
-        } else {
-            get_rclone_config(None)?
-        };
-        let home_dir = dirs::home_dir().unwrap_or_default();
-
-        // Prune SFTP remotes with missing key files
-        let sftp_to_prune: Vec<String> = updated_config
-            .iter()
-            .filter(|(_, remote)| {
-                remote.remote_type == "sftp"
-                    && remote.description.as_deref() == Some("managed by pass-ssh-unpack")
-                    && remote
-                        .key_file
-                        .as_ref()
-                        .map(|kf| {
-                            let expanded = kf.replace("~", &home_dir.to_string_lossy());
-                            !std::path::Path::new(&expanded).exists()
-                        })
-                        .unwrap_or(false)
-            })
-            .map(|(name, _)| name.clone())
-            .collect();
-
-        for name in &sftp_to_prune {
-            if let Some(ref mut cfg) = in_memory_config {
-                delete_remote_in_memory(cfg.content_mut(), name);
-            } else {
-                delete_remote_via_rclone(name)?;
-            }
-            pruned_names.push(name.clone());
-        }
-
-        // Prune alias remotes whose target was deleted
-        if !sftp_to_prune.is_empty() {
-            let updated_config = if let Some(ref cfg) = in_memory_config {
-                parse_ini_config(cfg.content())
-            } else {
-                get_rclone_config(None)?
-            };
-            let alias_to_prune: Vec<String> = updated_config
-                .iter()
-                .filter(|(_, remote)| {
-                    remote.remote_type == "alias"
-                        && remote.description.as_deref() == Some("managed by pass-ssh-unpack")
-                        && remote
-                            .remote
-                            .as_ref()
-                            .map(|r| {
-                                let target = r.trim_end_matches(':');
-                                !updated_config.contains_key(target)
-                            })
-                            .unwrap_or(false)
-                })
-                .map(|(name, _)| name.clone())
-                .collect();
-
-            for name in alias_to_prune {
-                if let Some(ref mut cfg) = in_memory_config {
-                    delete_remote_in_memory(cfg.content_mut(), &name);
-                } else {
-                    delete_remote_via_rclone(&name)?;
-                }
-                pruned_names.push(name);
-            }
-        }
-    }
-
     // Finalize in-memory config (write to disk and re-encrypt)
     if let Some(ref mut cfg) = in_memory_config {
         let spinner_msg = if cfg.should_encrypt() {
@@ -603,12 +530,6 @@ pub fn sync_remotes(
                 println!("  - {}", name);
             }
         }
-        if !pruned_names.is_empty() {
-            pruned_names.sort();
-            for name in &pruned_names {
-                println!("  x {} (orphaned)", name);
-            }
-        }
 
         // Show counts summary
         let mut parts = Vec::new();
@@ -635,9 +556,6 @@ pub fn sync_remotes(
                 "  Skipped {} (unmanaged conflicts).",
                 skipped_unmanaged.len()
             );
-        }
-        if !pruned_names.is_empty() {
-            println!("  Pruned {} orphaned remotes.", pruned_names.len());
         }
     }
 
