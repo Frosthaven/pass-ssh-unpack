@@ -3,22 +3,30 @@ name: Version Check
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
 
 jobs:
   check-version:
     name: Check version is bumped
     runs-on: ubuntu-latest
     steps:
+      - name: Check if version bump required
+        id: check-paths
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            needs-bump:
+              - 'src/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+
       - name: Checkout
+        if: steps.check-paths.outputs.needs-bump == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Compare versions
+        if: steps.check-paths.outputs.needs-bump == 'true'
         run: |
           # Get version from PR branch
           PR_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
@@ -43,3 +51,7 @@ jobs:
           
           echo ""
           echo "Version check passed: $MAIN_VERSION -> $PR_VERSION"
+
+      - name: Skip version check
+        if: steps.check-paths.outputs.needs-bump != 'true'
+        run: echo "No source changes, skipping version check"
