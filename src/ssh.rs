@@ -217,7 +217,8 @@ impl SshManager {
         }
 
         // Build config entries
-        let mut config_block = format!("Host {}", host_field);
+        let sanitized_host = sanitize_name(&host_field);
+        let mut config_block = format!("Host {}", sanitized_host);
         if has_key {
             config_block.push_str(&format!(
                 "\n    IdentityFile \"{}\"\n    IdentitiesOnly yes",
@@ -227,7 +228,7 @@ impl SshManager {
         if let Some(ref username) = item.username {
             config_block.push_str(&format!("\n    User {}", username));
         }
-        self.new_hosts.insert(host_field.clone(), config_block);
+        self.new_hosts.insert(sanitized_host.clone(), config_block);
 
         // Build alias entries
         let aliases_list: Vec<String> = if let Some(ref aliases) = item.aliases {
@@ -245,7 +246,9 @@ impl SshManager {
                 continue;
             }
 
-            let mut alias_block = format!("# Alias of {}\nHost {}", host_field, alias_entry);
+            let sanitized_alias = sanitize_name(alias_entry);
+            let mut alias_block =
+                format!("# Alias of {}\nHost {}", sanitized_host, sanitized_alias);
             if has_key {
                 alias_block.push_str(&format!(
                     "\n    IdentityFile \"{}\"\n    IdentitiesOnly yes",
@@ -255,7 +258,7 @@ impl SshManager {
             if let Some(ref username) = item.username {
                 alias_block.push_str(&format!("\n    User {}", username));
             }
-            self.new_hosts.insert(alias_entry.clone(), alias_block);
+            self.new_hosts.insert(sanitized_alias, alias_block);
         }
 
         // Build rclone entry
