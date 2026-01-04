@@ -185,8 +185,8 @@ Examples:
    - Generates public key using `ssh-keygen`
    - Saves public key back to Proton Pass if missing and `sync-public-key` is
    enabled
-4. **Generate SSH config**: Creates `<configured_path>/config` with host entries that you can include in your own ssh config file.
-5. **Sync rclone** (optional): Creates SFTP remotes named after the first alias
+4. **Generate SSH config**: Creates `~/.ssh/proton-pass/config` (or at your configured `ssh_output_dir`) with host entries that you can include in your own ssh config file.
+5. **Sync rclone remotes**: Syncs SFTP remotes named after the first alias
 
 ### SSH Config Integration
 
@@ -195,6 +195,7 @@ Add this line to your `~/.ssh/config`:
 ```
 Include ~/.ssh/proton-pass/config
 ```
+_Note: If you used a custom `ssh_output_dir`, include config from there._
 
 ## License
 
