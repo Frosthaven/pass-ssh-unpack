@@ -4,7 +4,7 @@
 > This tool is still in the PROTOTYPE phase. Expect breaking changes.
 > It is not recommended for use in production environments.
 
-Extract SSH keys from Proton Pass to local files and generate SSH config.
+A utility for unpacking proton's pass-cli ssh keys into usable ssh and rclone configurations. 
 
 ## Features
 
