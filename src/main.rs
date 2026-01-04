@@ -2,6 +2,7 @@ mod cli;
 mod config;
 mod error;
 mod platform;
+mod progress;
 mod proton_pass;
 mod rclone;
 mod ssh;
@@ -65,7 +66,7 @@ fn run() -> Result<()> {
 
     // Handle purge mode
     if args.purge {
-        return handle_purge(&config, dry_run, &log);
+        return handle_purge(&config, dry_run, args.quiet);
     }
 
     log("Extracting SSH keys from Proton Pass...");
@@ -85,7 +86,15 @@ fn run() -> Result<()> {
 
     // Get vaults to process
     let proton_pass = ProtonPass::new();
+    let spinner = if !args.quiet {
+        Some(progress::spinner("Loading vaults..."))
+    } else {
+        None
+    };
     let all_vaults = proton_pass.list_vaults()?;
+    if let Some(sp) = spinner {
+        sp.finish_and_clear();
+    }
 
     // Apply vault filters (CLI overrides config defaults)
     let vault_patterns = if args.vault.is_empty() {
@@ -110,23 +119,46 @@ fn run() -> Result<()> {
     // Collect rclone entries for later sync
     let mut rclone_entries: Vec<RcloneEntry> = Vec::new();
 
-    // Process each vault
-    for vault in &vaults_to_process {
-        log(&format!("[{}]", vault));
+    // Process each vault with progress bar
+    let vault_pb = if !args.quiet && !vaults_to_process.is_empty() {
+        Some(progress::vault_progress_bar(vaults_to_process.len() as u64))
+    } else {
+        None
+    };
+
+    // Helper for logging that works with progress bar
+    let pb_log = |msg: &str| {
+        if !args.quiet {
+            if let Some(ref pb) = vault_pb {
+                pb.println(msg);
+            } else {
+                println!("{}", msg);
+            }
+        }
+    };
+
+    for (i, vault) in vaults_to_process.iter().enumerate() {
+        pb_log(&format!("[{}]", vault));
 
         let items = match proton_pass.list_ssh_keys(vault) {
             Ok(items) => items,
             Err(e) => {
                 errors.add(&format!("Failed to list SSH keys in vault '{}'", vault), e);
-                log("  (error listing keys)");
-                log("");
+                pb_log("  (error listing keys)");
+                pb_log("");
+                if let Some(ref pb) = vault_pb {
+                    pb.set_position(i as u64 + 1);
+                }
                 continue;
             }
         };
 
         if items.is_empty() {
-            log("  (no SSH keys)");
-            log("");
+            pb_log("  (no SSH keys)");
+            pb_log("");
+            if let Some(ref pb) = vault_pb {
+                pb.set_position(i as u64 + 1);
+            }
             continue;
         }
 
@@ -141,7 +173,7 @@ fn run() -> Result<()> {
                 if item.title.contains('/') {
                     let suffix_lower = suffix.to_lowercase();
                     if suffix_lower != current_hostname.to_lowercase() {
-                        log(&format!(
+                        pb_log(&format!(
                             "  Skipping: {} (not for this machine)",
                             item.title
                         ));
@@ -150,10 +182,10 @@ fn run() -> Result<()> {
                 }
             }
 
-            log(&format!("  Processing: {}", item.title));
+            pb_log(&format!("  Processing: {}", item.title));
 
             // Extract and process the SSH key
-            match ssh_manager.process_item(&proton_pass, vault, &item, &log) {
+            match ssh_manager.process_item(&proton_pass, vault, &item, &pb_log) {
                 Ok(entry) => {
                     if let Some(rclone_entry) = entry {
                         rclone_entries.push(rclone_entry);
@@ -165,7 +197,14 @@ fn run() -> Result<()> {
             }
         }
 
-        log("");
+        pb_log("");
+        if let Some(ref pb) = vault_pb {
+            pb.set_position(i as u64 + 1);
+        }
+    }
+
+    if let Some(pb) = vault_pb {
+        pb.finish_and_clear();
     }
 
     // Generate SSH config
@@ -187,7 +226,9 @@ fn run() -> Result<()> {
 
     // Sync rclone remotes
     if !args.no_rclone && config.rclone.enabled {
-        if let Err(e) = rclone::sync_remotes(&rclone_entries, &config, args.full, dry_run, &log) {
+        if let Err(e) =
+            rclone::sync_remotes(&rclone_entries, &config, args.full, dry_run, args.quiet)
+        {
             errors.add("Rclone sync", e);
         }
     }
@@ -215,7 +256,22 @@ fn check_dependencies() -> Result<()> {
         .output()?;
 
     if !output.status.success() {
-        bail!("Not logged into Proton Pass. Run 'pass-cli login' first.");
+        eprintln!("Not logged into Proton Pass. Launching login...");
+        eprintln!();
+
+        // Try to login interactively
+        let login_status = std::process::Command::new("pass-cli")
+            .arg("login")
+            .stdin(std::process::Stdio::inherit())
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .status()?;
+
+        if !login_status.success() {
+            bail!("Failed to login to Proton Pass. Please run 'pass-cli login' manually.");
+        }
+
+        eprintln!();
     }
 
     if which::which("ssh-keygen").is_err() {
@@ -225,26 +281,34 @@ fn check_dependencies() -> Result<()> {
     Ok(())
 }
 
-fn handle_purge(config: &Config, dry_run: bool, log: &impl Fn(&str)) -> Result<()> {
-    log("Purging all managed SSH keys and rclone remotes...");
+fn handle_purge(config: &Config, dry_run: bool, quiet: bool) -> Result<()> {
+    if !quiet {
+        println!("Purging all managed SSH keys and rclone remotes...");
+    }
 
     // Delete SSH keys folder
     let ssh_dir = config.expanded_ssh_output_dir();
     if ssh_dir.exists() {
         if dry_run {
-            log(&format!("  Would remove {}", ssh_dir.display()));
+            if !quiet {
+                println!("  Would remove {}", ssh_dir.display());
+            }
         } else {
             std::fs::remove_dir_all(&ssh_dir)?;
-            log(&format!("  Removed {}", ssh_dir.display()));
+            if !quiet {
+                println!("  Removed {}", ssh_dir.display());
+            }
         }
-    } else {
-        log(&format!("  {} does not exist", ssh_dir.display()));
+    } else if !quiet {
+        println!("  {} does not exist", ssh_dir.display());
     }
 
     // Delete managed rclone remotes
-    rclone::purge_managed_remotes(config, dry_run, log)?;
+    rclone::purge_managed_remotes(config, dry_run, quiet)?;
 
-    log("Done.");
+    if !quiet {
+        println!("Done.");
+    }
     Ok(())
 }
 
