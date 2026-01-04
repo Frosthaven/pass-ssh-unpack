@@ -2,6 +2,19 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+/// When to sync public keys back to Proton Pass
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncPublicKey {
+    /// Never sync public keys
+    Never,
+    /// Only sync if the public key field is empty (default)
+    #[default]
+    IfEmpty,
+    /// Always overwrite the public key
+    Always,
+}
+
 /// Default configuration file content with comments
 const DEFAULT_CONFIG: &str = r#"# pass-ssh-unpack configuration file
 # This file is auto-generated on first run. All fields are optional.
@@ -20,6 +33,13 @@ default_vaults = []
 # Supports wildcards: "github/*", "*-prod", etc.
 # Default: [] (all items)
 default_items = []
+
+# When to sync generated public keys back to Proton Pass
+# Options: "never", "if_empty" (default), "always"
+#   never    - Never update public keys in Proton Pass
+#   if_empty - Only update if the public key field is empty (default)
+#   always   - Always overwrite the public key in Proton Pass
+sync_public_key = "if_empty"
 
 [rclone]
 # Enable rclone SFTP remote sync
@@ -45,6 +65,9 @@ pub struct Config {
 
     #[serde(default)]
     pub default_items: Vec<String>,
+
+    #[serde(default)]
+    pub sync_public_key: SyncPublicKey,
 
     #[serde(default)]
     pub rclone: RcloneConfig,
@@ -82,6 +105,7 @@ impl Default for Config {
             ssh_output_dir: default_ssh_output_dir(),
             default_vaults: Vec::new(),
             default_items: Vec::new(),
+            sync_public_key: SyncPublicKey::default(),
             rclone: RcloneConfig::default(),
         }
     }
@@ -135,6 +159,51 @@ impl Config {
     pub fn expanded_ssh_output_dir(&self) -> PathBuf {
         expand_tilde(&self.ssh_output_dir)
     }
+}
+
+/// Known top-level config keys (for detecting missing options)
+const KNOWN_KEYS: &[&str] = &[
+    "ssh_output_dir",
+    "default_vaults",
+    "default_items",
+    "sync_public_key",
+    "rclone",
+];
+
+/// Known rclone section keys
+const KNOWN_RCLONE_KEYS: &[&str] = &["enabled", "password_path"];
+
+/// Check for missing config options and return a list of missing keys
+pub fn check_missing_options(path: &std::path::Path) -> Vec<String> {
+    let mut missing = Vec::new();
+
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return missing, // Can't read file, skip check
+    };
+
+    let table: toml::Table = match content.parse() {
+        Ok(t) => t,
+        Err(_) => return missing, // Can't parse, skip check
+    };
+
+    // Check top-level keys
+    for key in KNOWN_KEYS {
+        if !table.contains_key(*key) {
+            missing.push(key.to_string());
+        }
+    }
+
+    // Check rclone section keys
+    if let Some(toml::Value::Table(rclone)) = table.get("rclone") {
+        for key in KNOWN_RCLONE_KEYS {
+            if !rclone.contains_key(*key) {
+                missing.push(format!("rclone.{}", key));
+            }
+        }
+    }
+
+    missing
 }
 
 /// Expand ~ to home directory

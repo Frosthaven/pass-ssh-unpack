@@ -97,6 +97,10 @@ default_vaults = []
 # Default item filter(s) - applied when no --item flag is given
 default_items = []
 
+# When to sync generated public keys back to Proton Pass
+# Options: "never", "if_empty" (default), "always"
+sync_public_key = "if_empty"
+
 [rclone]
 # Enable rclone SFTP remote sync
 enabled = true
@@ -105,6 +109,16 @@ enabled = true
 # Optional if RCLONE_CONFIG_PASS is already set in your environment
 password_path = ""
 ```
+
+### Sync Public Key Options
+
+The `sync_public_key` option controls when generated public keys are synced back to Proton Pass:
+
+| Value | Description |
+|-------|-------------|
+| `"never"` | Never update public keys in Proton Pass |
+| `"if_empty"` | Only update if the public key field is empty (default) |
+| `"always"` | Always overwrite the public key in Proton Pass |
 
 ### Rclone Config Password
 
