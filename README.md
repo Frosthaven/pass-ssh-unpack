@@ -55,14 +55,14 @@ ln -s "$(pwd)/target/release/pass-ssh-unpack" ~/.local/bin/pass-ssh-unpack
 ## Usage
 
 ```bash
-# Extract all SSH keys from all vaults
+# Generates SSH key files, config, and rclone remotes from all vaults
 pass-ssh-unpack
 
-# Extract keys from specific vault(s)
+# ..from specific vault(s)
 pass-ssh-unpack --vault Personal
 pass-ssh-unpack --vault "Work*"    # Wildcard matching
 
-# Extract specific items
+# ..for specific items
 pass-ssh-unpack --item "github/*"
 pass-ssh-unpack --vault Personal --item "github/*"
 
@@ -75,7 +75,7 @@ pass-ssh-unpack --ssh
 # Only process rclone remotes (skip SSH)
 pass-ssh-unpack --rclone
 
-# Remove all managed SSH keys and rclone remotes
+# Remove all managed SSH key files, config, and rclone remotes
 pass-ssh-unpack --purge
 
 # Quiet mode (suppress output)
@@ -180,12 +180,12 @@ Examples:
 ## How It Works
 
 1. **Authenticate**: Checks that you're logged into Proton Pass CLI
-2. **List vaults**: Gets all vaults (or filtered by `--vault`)
-3. **Extract keys**: For each SSH key item:
+2. **Extract keys**: For each SSH key item:
    - Writes private key to `~/.ssh/proton-pass/<vault>/<item>`
    - Generates public key using `ssh-keygen`
-   - Saves public key back to Proton Pass if missing
-4. **Generate SSH config**: Creates `~/.ssh/proton-pass/config` with host entries
+   - Saves public key back to Proton Pass if missing and `sync-public-key` is
+   enabled
+4. **Generate SSH config**: Creates `<configured_path>/config` with host entries that you can include in your own ssh config file.
 5. **Sync rclone** (optional): Creates SFTP remotes named after the first alias
 
 ### SSH Config Integration
