@@ -140,8 +140,42 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: read
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get merged PR info
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get the PR that was merged with this commit
+          PR_JSON=$(gh pr list --state merged --base main --json number,title,body --limit 1 --search "$(git rev-parse HEAD)")
+          
+          if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "[]" ]; then
+            # Fallback: get most recently merged PR to main
+            PR_JSON=$(gh pr list --state merged --base main --json number,title,body --limit 1)
+          fi
+          
+          PR_TITLE=$(echo "$PR_JSON" | jq -r '.[0].title // empty')
+          PR_BODY=$(echo "$PR_JSON" | jq -r '.[0].body // empty')
+          
+          # Use PR title or fallback to version
+          if [ -n "$PR_TITLE" ]; then
+            echo "title=$PR_TITLE" >> $GITHUB_OUTPUT
+          else
+            echo "title=v${{ needs.check-version.outputs.version }}" >> $GITHUB_OUTPUT
+          fi
+          
+          # Write body to file to handle multiline content
+          if [ -n "$PR_BODY" ]; then
+            echo "$PR_BODY" > pr_body.md
+          else
+            echo "Release v${{ needs.check-version.outputs.version }}" > pr_body.md
+          fi
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -155,7 +189,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.check-version.outputs.version }}
-          name: v${{ needs.check-version.outputs.version }}
+          name: ${{ steps.pr.outputs.title }}
+          body_path: pr_body.md
           draft: true
           files: artifacts/*
         env:
