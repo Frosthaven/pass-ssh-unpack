@@ -50,7 +50,7 @@ enabled = true
 # This is optional if RCLONE_CONFIG_PASS is already set in your environment.
 # If both are set, this value takes precedence.
 # Leave empty to rely on environment variable or unencrypted config.
-# Example: "Personal/rclone-password" (vault/item format)
+# Example: "pass://Personal/rclone/password"
 # Default: ""
 password_path = ""
 "#;
