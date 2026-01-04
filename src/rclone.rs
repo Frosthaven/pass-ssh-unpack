@@ -37,8 +37,9 @@ pub fn sync_remotes(
     log("");
     log("Syncing rclone remotes...");
 
-    // Set rclone password if configured
+    // Set rclone password: password_path -> env var -> prompt (handled in get_rclone_config)
     if !config.rclone.password_path.is_empty() {
+        // Try to get password from Proton Pass
         let proton_pass = ProtonPass::new();
         match proton_pass.get_item_field(&config.rclone.password_path, "password") {
             Ok(password) => {
@@ -50,6 +51,8 @@ pub fn sync_remotes(
             }
         }
     }
+    // If password_path is empty, check if RCLONE_CONFIG_PASS is already set
+    // If not set, get_rclone_config() will prompt the user if needed
 
     // Get current config
     let mut current_config = get_rclone_config()?;
@@ -244,7 +247,7 @@ pub fn purge_managed_remotes(config: &Config, dry_run: bool, log: &impl Fn(&str)
         return Ok(());
     }
 
-    // Set rclone password if configured
+    // Set rclone password: password_path -> env var -> prompt (handled in get_rclone_config)
     if !config.rclone.password_path.is_empty() {
         let proton_pass = ProtonPass::new();
         if let Ok(password) = proton_pass.get_item_field(&config.rclone.password_path, "password") {
@@ -301,10 +304,65 @@ struct RcloneRemote {
 fn get_rclone_config() -> Result<HashMap<String, RcloneRemote>> {
     let output = Command::new("rclone")
         .args(["config", "dump"])
+        .env("RCLONE_ASK_PASSWORD", "false")
         .output()
         .context("Failed to run rclone config dump")?;
 
-    if !output.status.success() || output.stdout.is_empty() {
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Check if this is an encrypted config without password
+        if stderr.contains("unable to decrypt configuration")
+            || stderr.contains("RCLONE_CONFIG_PASS")
+        {
+            // Prompt user for password
+            eprint!("Rclone config password: ");
+            let password = rpassword::read_password().context("Failed to read rclone password")?;
+
+            if password.is_empty() {
+                anyhow::bail!(
+                    "No password provided. Set 'password_path' in your config file under [rclone] to avoid this prompt, e.g.:\n\
+                     \n\
+                     [rclone]\n\
+                     password_path = \"pass://Personal/rclone/password\""
+                );
+            }
+
+            // Set the password and retry
+            std::env::set_var("RCLONE_CONFIG_PASS", &password);
+
+            let retry_output = Command::new("rclone")
+                .args(["config", "dump"])
+                .output()
+                .context("Failed to run rclone config dump")?;
+
+            if !retry_output.status.success() {
+                let retry_stderr = String::from_utf8_lossy(&retry_output.stderr);
+                if retry_stderr.contains("wrong password")
+                    || retry_stderr.contains("unable to decrypt")
+                {
+                    // Clear the bad password
+                    std::env::remove_var("RCLONE_CONFIG_PASS");
+                    anyhow::bail!("Incorrect rclone config password");
+                }
+                return Ok(HashMap::new());
+            }
+
+            if retry_output.stdout.is_empty() {
+                return Ok(HashMap::new());
+            }
+
+            let config: HashMap<String, RcloneRemote> =
+                serde_json::from_slice(&retry_output.stdout).unwrap_or_default();
+
+            return Ok(config);
+        }
+
+        // Other errors - return empty config (might just be no config file)
+        return Ok(HashMap::new());
+    }
+
+    if output.stdout.is_empty() {
         return Ok(HashMap::new());
     }
 
