@@ -122,10 +122,10 @@ SSH key items in Proton Pass should have the following fields:
 | Field | Required | Description |
 |-------|----------|-------------|
 | **Title** | Yes | Item name. Use `title/hostname` format for machine-specific keys |
-| **SSH Key** | Yes | The private key (and optionally public key) |
-| **Host** | Yes | The SSH host (IP or hostname) - stored as extra field |
-| **Username** | No | SSH username - stored as extra field |
-| **Aliases** | No | Comma-separated host aliases - stored as extra field |
+| **Private Key** | Yes | The private key |
+| **Host** | Yes | The SSH host (IP or hostname) |
+| **Username** | No | SSH username |
+| **Aliases** | No | Comma-separated host aliases |
 
 ### Machine-Specific Keys
 
