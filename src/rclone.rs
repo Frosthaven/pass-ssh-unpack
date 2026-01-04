@@ -430,9 +430,9 @@ pub fn sync_remotes(
     };
 
     let mut completed = 0u64;
-    let mut created_count = 0;
-    let mut updated_count = 0;
-    let mut deleted_count = 0;
+    let mut created_names: Vec<String> = Vec::new();
+    let mut updated_names: Vec<String> = Vec::new();
+    let mut deleted_names: Vec<String> = Vec::new();
 
     // Delete remotes
     for name in &to_delete {
@@ -444,7 +444,7 @@ pub fn sync_remotes(
         } else {
             delete_remote_via_rclone(name)?;
         }
-        deleted_count += 1;
+        deleted_names.push(name.clone());
         completed += 1;
         if let Some(ref bar) = pb {
             bar.set_position(completed);
@@ -461,7 +461,7 @@ pub fn sync_remotes(
         } else {
             create_remote_via_rclone(name, desired)?;
         }
-        created_count += 1;
+        created_names.push(name.clone());
         completed += 1;
         if let Some(ref bar) = pb {
             bar.set_position(completed);
@@ -480,7 +480,7 @@ pub fn sync_remotes(
             delete_remote_via_rclone(name)?;
             create_remote_via_rclone(name, desired)?;
         }
-        updated_count += 1;
+        updated_names.push(name.clone());
         completed += 1;
         if let Some(ref bar) = pb {
             bar.set_position(completed);
@@ -492,7 +492,7 @@ pub fn sync_remotes(
     }
 
     // Auto-prune orphaned remotes (managed remotes with missing key files)
-    let mut pruned_count = 0;
+    let mut pruned_names: Vec<String> = Vec::new();
     {
         // Re-parse the current state
         let updated_config = if let Some(ref cfg) = in_memory_config {
@@ -526,7 +526,7 @@ pub fn sync_remotes(
             } else {
                 delete_remote_via_rclone(name)?;
             }
-            pruned_count += 1;
+            pruned_names.push(name.clone());
         }
 
         // Prune alias remotes whose target was deleted
@@ -559,7 +559,7 @@ pub fn sync_remotes(
                 } else {
                     delete_remote_via_rclone(&name)?;
                 }
-                pruned_count += 1;
+                pruned_names.push(name);
             }
         }
     }
@@ -584,15 +584,42 @@ pub fn sync_remotes(
 
     // Summary
     if !quiet {
+        // Show detailed lists of changes
+        if !created_names.is_empty() {
+            created_names.sort();
+            for name in &created_names {
+                println!("  + {}", name);
+            }
+        }
+        if !updated_names.is_empty() {
+            updated_names.sort();
+            for name in &updated_names {
+                println!("  ~ {}", name);
+            }
+        }
+        if !deleted_names.is_empty() {
+            deleted_names.sort();
+            for name in &deleted_names {
+                println!("  - {}", name);
+            }
+        }
+        if !pruned_names.is_empty() {
+            pruned_names.sort();
+            for name in &pruned_names {
+                println!("  x {} (orphaned)", name);
+            }
+        }
+
+        // Show counts summary
         let mut parts = Vec::new();
-        if created_count > 0 {
-            parts.push(format!("{} created", created_count));
+        if !created_names.is_empty() {
+            parts.push(format!("{} created", created_names.len()));
         }
-        if updated_count > 0 {
-            parts.push(format!("{} updated", updated_count));
+        if !updated_names.is_empty() {
+            parts.push(format!("{} updated", updated_names.len()));
         }
-        if deleted_count > 0 {
-            parts.push(format!("{} deleted", deleted_count));
+        if !deleted_names.is_empty() {
+            parts.push(format!("{} deleted", deleted_names.len()));
         }
         if !unchanged.is_empty() {
             parts.push(format!("{} unchanged", unchanged.len()));
@@ -609,8 +636,8 @@ pub fn sync_remotes(
                 skipped_unmanaged.len()
             );
         }
-        if pruned_count > 0 {
-            println!("  Pruned {} orphaned remotes.", pruned_count);
+        if !pruned_names.is_empty() {
+            println!("  Pruned {} orphaned remotes.", pruned_names.len());
         }
     }
 
