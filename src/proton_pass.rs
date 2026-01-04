@@ -143,17 +143,16 @@ impl ProtonPass {
         Ok(items)
     }
 
-    /// Get a field value from item's password (for rclone password lookup)
-    pub fn get_item_field(&self, path: &str, field: &str) -> Result<String> {
+    /// Get a field value from a pass URI (e.g., pass://Vault/Item/password)
+    pub fn get_item_field(&self, path: &str) -> Result<String> {
         let output = Command::new("pass-cli")
-            .args(["item", "view", path, "--field", field])
+            .args(["item", "view", path])
             .output()
             .context("Failed to execute pass-cli item view")?;
 
         if !output.status.success() {
             anyhow::bail!(
-                "Failed to get field '{}' from '{}': {}",
-                field,
+                "Failed to get value from '{}': {}",
                 path,
                 String::from_utf8_lossy(&output.stderr)
             );

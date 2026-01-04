@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// When to sync public keys back to Proton Pass
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default, ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub enum SyncPublicKey {
     /// Never sync public keys
@@ -53,6 +54,12 @@ enabled = true
 # Example: "pass://Personal/rclone/password"
 # Default: ""
 password_path = ""
+
+# Always ensure rclone config is encrypted after operations
+# If true and a password is available (via password_path or RCLONE_CONFIG_PASS),
+# the rclone config will be re-encrypted even if it wasn't encrypted before.
+# Default: false
+always_encrypt = false
 "#;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -80,6 +87,9 @@ pub struct RcloneConfig {
 
     #[serde(default)]
     pub password_path: String,
+
+    #[serde(default)]
+    pub always_encrypt: bool,
 }
 
 fn default_ssh_output_dir() -> String {
@@ -95,6 +105,7 @@ impl Default for RcloneConfig {
         Self {
             enabled: true,
             password_path: String::new(),
+            always_encrypt: false,
         }
     }
 }
@@ -171,7 +182,7 @@ const KNOWN_KEYS: &[&str] = &[
 ];
 
 /// Known rclone section keys
-const KNOWN_RCLONE_KEYS: &[&str] = &["enabled", "password_path"];
+const KNOWN_RCLONE_KEYS: &[&str] = &["enabled", "password_path", "always_encrypt"];
 
 /// Check for missing config options and return a list of missing keys
 pub fn check_missing_options(path: &std::path::Path) -> Vec<String> {

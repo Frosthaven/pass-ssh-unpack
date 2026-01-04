@@ -14,6 +14,8 @@ A utility for unpacking proton's pass-cli ssh keys into usable ssh and rclone co
 - **Incremental updates**: Only processes changed items by default
 - **Rclone integration**: Automatically creates SFTP remotes for each SSH host
 - **Wildcard filtering**: Filter vaults and items using glob patterns
+- **Progress indicators**: Visual feedback with spinners and progress bars
+- **Encrypted rclone config**: Supports encrypted rclone configs with password from Proton Pass
 
 ## Requirements
 
@@ -23,13 +25,15 @@ A utility for unpacking proton's pass-cli ssh keys into usable ssh and rclone co
 
 ## Installation
 
-### From crates.io
+### From [crates.io](https://crates.io/crates/pass-ssh-unpack)
 
 ```bash
 cargo install pass-ssh-unpack
 ```
 
 ### From source
+
+#### Clone Repository
 
 ```bash
 git clone https://github.com/Frosthaven/pass-ssh-unpack.git
@@ -38,7 +42,7 @@ cargo build --release
 # Binary will be at ./target/release/pass-ssh-unpack
 ```
 
-### Add to PATH
+#### Add to PATH
 
 ```bash
 # Linux/macOS
@@ -65,8 +69,11 @@ pass-ssh-unpack --vault Personal --item "github/*"
 # Full regeneration (clear and rebuild)
 pass-ssh-unpack --full
 
-# Skip rclone sync
-pass-ssh-unpack --no-rclone
+# Only process SSH keys (skip rclone)
+pass-ssh-unpack --ssh
+
+# Only process rclone remotes (skip SSH)
+pass-ssh-unpack --rclone
 
 # Remove all managed SSH keys and rclone remotes
 pass-ssh-unpack --purge
@@ -80,6 +87,8 @@ pass-ssh-unpack --dry-run
 
 ### CLI Options
 
+CLI options override corresponding config file settings.
+
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--vault <PATTERN>` | `-v` | Vault(s) to process (repeatable, supports wildcards) |
@@ -87,9 +96,14 @@ pass-ssh-unpack --dry-run
 | `--full` | `-f` | Full regeneration (clear config first) |
 | `--dry-run` | | Show what would be done without making changes |
 | `--quiet` | `-q` | Suppress output |
-| `--no-rclone` | | Skip rclone remote sync |
+| `--ssh` | | Only process SSH keys (skip rclone sync) |
+| `--rclone` | | Only process rclone remotes (skip SSH extraction) |
 | `--purge` | | Remove all managed SSH keys and rclone remotes |
 | `--config <PATH>` | `-c` | Custom config file path |
+| `--output-dir <PATH>` | `-o` | Override SSH output directory |
+| `--sync-public-key <MODE>` | | Override public key sync mode (never/if-empty/always) |
+| `--rclone-password-path <PATH>` | | Override rclone password path in Proton Pass |
+| `--always-encrypt` | | Force rclone config encryption after operations |
 | `--help` | `-h` | Show help |
 | `--version` | `-V` | Show version |
 
@@ -98,46 +112,50 @@ pass-ssh-unpack --dry-run
 On first run, a default config file is created at `~/.config/pass-ssh-unpack/config.toml`:
 
 ```toml
+# pass-ssh-unpack configuration file
+# This file is auto-generated on first run. All fields are optional.
+
 # Directory where SSH keys and config are written
+# Supports ~ for home directory
+# Default: ~/.ssh/proton-pass
 ssh_output_dir = "~/.ssh/proton-pass"
 
 # Default vault filter(s) - applied when no --vault flag is given
+# Supports wildcards: "Personal", "Work*", etc.
+# Default: [] (all vaults)
 default_vaults = []
 
 # Default item filter(s) - applied when no --item flag is given
+# Supports wildcards: "github/*", "*-prod", etc.
+# Default: [] (all items)
 default_items = []
 
 # When to sync generated public keys back to Proton Pass
 # Options: "never", "if_empty" (default), "always"
+#   never    - Never update public keys in Proton Pass
+#   if_empty - Only update if the public key field is empty (default)
+#   always   - Always overwrite the public key in Proton Pass
 sync_public_key = "if_empty"
 
 [rclone]
 # Enable rclone SFTP remote sync
+# Default: true
 enabled = true
 
 # Path in Proton Pass to rclone config password (if encrypted)
-# Optional if RCLONE_CONFIG_PASS is already set in your environment
+# This is optional if RCLONE_CONFIG_PASS is already set in your environment.
+# If both are set, this value takes precedence.
+# Leave empty to rely on environment variable or unencrypted config.
+# Example: "pass://Personal/rclone/password"
+# Default: ""
 password_path = ""
+
+# Always ensure rclone config is encrypted after operations
+# If true and a password is available (via password_path or RCLONE_CONFIG_PASS),
+# the rclone config will be re-encrypted even if it wasn't encrypted before.
+# Default: false
+always_encrypt = false
 ```
-
-### Sync Public Key Options
-
-The `sync_public_key` option controls when generated public keys are synced back to Proton Pass:
-
-| Value | Description |
-|-------|-------------|
-| `"never"` | Never update public keys in Proton Pass |
-| `"if_empty"` | Only update if the public key field is empty (default) |
-| `"always"` | Always overwrite the public key in Proton Pass |
-
-### Rclone Config Password
-
-If your rclone config is encrypted, the password can be provided in two ways:
-
-1. **Environment variable**: Set `RCLONE_CONFIG_PASS` in your shell profile
-2. **Proton Pass**: Set `password_path` in the config to fetch it from Proton Pass
-
-If both are available, the `password_path` value takes precedence.
 
 ## Proton Pass Item Structure
 
@@ -176,30 +194,6 @@ Add this line to your `~/.ssh/config`:
 
 ```
 Include ~/.ssh/proton-pass/config
-```
-
-## Rclone Remote Naming
-
-Rclone remotes are created with the following convention:
-
-- **Primary remote**: Named after the first alias (or item title if no aliases)
-  - Type: `sftp`
-  - Host: The actual hostname/IP from the `Host` field
-- **Additional aliases**: Created as `alias` type remotes pointing to the primary
-
-Example:
-```ini
-[my-server]
-type = sftp
-host = 192.168.1.100
-user = admin
-key_file = ~/.ssh/proton-pass/Personal/my-server
-description = managed by pass-ssh-unpack
-
-[server-alias]
-type = alias
-remote = my-server:
-description = managed by pass-ssh-unpack
 ```
 
 ## License
