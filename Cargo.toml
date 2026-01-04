@@ -1,6 +1,6 @@
 [package]
 name = "pass-ssh-unpack"
-version = "0.1.3"
+version = "0.2.0"
 authors = ["Shane Stanley <shane@thedragon.dev>"]
 edition = "2021"
 description = "A utility for unpacking proton's pass-cli ssh keys into usable ssh and rclone configurations."
