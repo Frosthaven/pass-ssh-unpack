@@ -17,7 +17,7 @@ pub struct RcloneEntry {
     pub user: String,
     pub key_file: String,
     pub other_aliases: String,
-    pub ssh_command: Option<String>,
+    pub ssh: Option<String>,
 }
 
 /// In-memory rclone config that only writes to disk on finalize.
@@ -316,7 +316,7 @@ pub fn sync_remotes(
                 } else {
                     Some(entry.key_file.clone())
                 },
-                ssh_command: entry.ssh_command.clone(),
+                ssh: entry.ssh.clone(),
             },
         );
 
@@ -698,7 +698,7 @@ enum DesiredRemote {
         host: String,
         user: String,
         key_file: Option<String>,
-        ssh_command: Option<String>,
+        ssh: Option<String>,
     },
     Alias {
         target: String,
@@ -720,7 +720,7 @@ struct RcloneRemote {
     #[serde(default)]
     user: Option<String>,
     #[serde(default)]
-    ssh_command: Option<String>,
+    ssh: Option<String>,
 }
 
 /// Check if existing remote matches desired config
@@ -730,15 +730,14 @@ fn remote_matches(existing: &RcloneRemote, desired: &DesiredRemote) -> bool {
             host,
             user,
             key_file,
-            ssh_command,
+            ssh,
         } => {
             existing.remote_type == "sftp"
                 && existing.host.as_deref() == Some(host)
                 && existing.user.as_deref() == Some(user)
                 && existing.key_file.as_ref().map(|s| s.as_str())
                     == key_file.as_ref().map(|s| s.as_str())
-                && existing.ssh_command.as_ref().map(|s| s.as_str())
-                    == ssh_command.as_ref().map(|s| s.as_str())
+                && existing.ssh.as_ref().map(|s| s.as_str()) == ssh.as_ref().map(|s| s.as_str())
         }
         DesiredRemote::Alias { target } => {
             existing.remote_type == "alias"
@@ -761,7 +760,7 @@ fn create_remote_in_memory(content: &mut String, name: &str, desired: &DesiredRe
             host,
             user,
             key_file,
-            ssh_command,
+            ssh,
         } => {
             let mut s = format!(
                 "[{}]\ntype = sftp\nhost = {}\nuser = {}\n",
@@ -772,8 +771,8 @@ fn create_remote_in_memory(content: &mut String, name: &str, desired: &DesiredRe
             } else {
                 s.push_str("ask_password = true\n");
             }
-            if let Some(cmd) = ssh_command {
-                s.push_str(&format!("ssh_command = {}\n", cmd));
+            if let Some(cmd) = ssh {
+                s.push_str(&format!("ssh = {}\n", cmd));
             }
             s.push_str("description = managed by pass-ssh-unpack\n");
             s
@@ -801,7 +800,7 @@ fn create_remote_via_rclone(name: &str, desired: &DesiredRemote) -> Result<()> {
             host,
             user,
             key_file,
-            ssh_command,
+            ssh,
         } => {
             cmd.args(["config", "create", name, "sftp"]);
             cmd.arg(format!("host={}", host));
@@ -813,8 +812,8 @@ fn create_remote_via_rclone(name: &str, desired: &DesiredRemote) -> Result<()> {
                 cmd.arg("ask_password=true");
             }
 
-            if let Some(ssh_cmd) = ssh_command {
-                cmd.arg(format!("ssh_command={}", ssh_cmd));
+            if let Some(ssh_cmd) = ssh {
+                cmd.arg(format!("ssh={}", ssh_cmd));
             }
 
             cmd.arg("description=managed by pass-ssh-unpack");
@@ -992,6 +991,6 @@ fn fields_to_remote(fields: &HashMap<String, String>) -> Option<RcloneRemote> {
         remote: fields.get("remote").cloned(),
         host: fields.get("host").cloned(),
         user: fields.get("user").cloned(),
-        ssh_command: fields.get("ssh_command").cloned(),
+        ssh: fields.get("ssh").cloned(),
     })
 }

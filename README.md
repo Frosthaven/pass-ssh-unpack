@@ -168,7 +168,23 @@ SSH key items in Proton Pass should have the following fields:
 | **Host** | Yes | The SSH host (IP or hostname) |
 | **Username** | No | SSH username |
 | **Aliases** | No | Comma-separated host aliases |
-| **Command** | No | Custom SSH command (maps to `ProxyCommand` in SSH config, `ssh_command` in rclone) |
+| **Jump** | No | Jump host for SSH config (`ProxyJump` directive) |
+| **Command** | No | Custom SSH binary/command for rclone (`ssh` option) |
+
+### Jump Hosts and Custom SSH Commands
+
+**Jump** is used for SSH config's `ProxyJump` directive - specify just the jump host:
+- Example: `Jump = bastion.example.com`
+- Generated SSH config: `ProxyJump bastion.example.com`
+- This field only affects SSH config, not rclone.
+
+**Command** is used for rclone's `ssh` option - specify the full SSH command:
+- Example: `Command = tsh ssh` (for Teleport)
+- Example: `Command = ssh -J bastion.example.com` (for jump host support in rclone)
+- Generated rclone config: `ssh = tsh ssh`
+- This field only affects rclone, not SSH config.
+
+Note: These fields are independent. Use Jump for standard SSH jump hosts, and Command when rclone needs a custom SSH binary or options.
 
 ### Machine-Specific Keys
 
