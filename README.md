@@ -168,14 +168,47 @@ SSH key items in Proton Pass should have the following fields:
 | **Host** | Yes | The SSH host (IP or hostname) |
 | **Username** | No | SSH username |
 | **Aliases** | No | Comma-separated host aliases |
+| **Jump** | No | Jump host for SSH config (`ProxyJump` directive) |
+| **Command** | No | Custom SSH binary/command for rclone (`ssh` option) |
+
+### Jump Hosts and Custom SSH Commands
+
+**Jump** is used for SSH config's `ProxyJump` directive - specify just the jump host:
+- Example: `Jump = bastion.example.com`
+- Generated SSH config: `ProxyJump bastion.example.com`
+- This field only affects SSH config, not rclone.
+
+**Command** is used for rclone's `ssh` option - specify the full SSH command:
+- Example: `Command = tsh ssh` (for Teleport)
+- Example: `Command = ssh -J bastion.example.com` (for jump host support in rclone)
+- Generated rclone config: `ssh = tsh ssh`
+- This field only affects rclone, not SSH config.
+
+Note: These fields are independent. Use Jump for standard SSH jump hosts, and Command when rclone needs a custom SSH binary or options.
 
 ### Machine-Specific Keys
 
-If an item title contains a `/`, the part after the last `/` is treated as a hostname filter. The key will only be extracted on machines with a matching hostname.
+If an item title contains a `/`, the part after the last `/` is treated as a hostname filter. The key will only be extracted on machines with a matching hostname (case-insensitive).
 
 Examples:
 - `github/my-laptop` - Only extracted on machine with hostname `my-laptop`
 - `work-server` - Extracted on all machines
+
+#### macOS Hostname Detection
+
+On macOS, the tool uses the **LocalHostName** (Bonjour name) rather than the dynamic DHCP hostname, which can change based on network configuration. This provides stable machine identification.
+
+To check your LocalHostName:
+```bash
+scutil --get LocalHostName
+```
+
+To set it (if needed):
+```bash
+sudo scutil --set LocalHostName my-laptop
+```
+
+On Linux and Windows, the system hostname is used directly.
 
 ## How It Works
 
