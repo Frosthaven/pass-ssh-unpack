@@ -171,11 +171,27 @@ SSH key items in Proton Pass should have the following fields:
 
 ### Machine-Specific Keys
 
-If an item title contains a `/`, the part after the last `/` is treated as a hostname filter. The key will only be extracted on machines with a matching hostname.
+If an item title contains a `/`, the part after the last `/` is treated as a hostname filter. The key will only be extracted on machines with a matching hostname (case-insensitive).
 
 Examples:
 - `github/my-laptop` - Only extracted on machine with hostname `my-laptop`
 - `work-server` - Extracted on all machines
+
+#### macOS Hostname Detection
+
+On macOS, the tool uses the **LocalHostName** (Bonjour name) rather than the dynamic DHCP hostname, which can change based on network configuration. This provides stable machine identification.
+
+To check your LocalHostName:
+```bash
+scutil --get LocalHostName
+```
+
+To set it (if needed):
+```bash
+sudo scutil --set LocalHostName my-laptop
+```
+
+On Linux and Windows, the system hostname is used directly.
 
 ## How It Works
 

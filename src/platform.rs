@@ -2,7 +2,32 @@ use anyhow::Result;
 use std::path::Path;
 
 /// Get the current hostname (lowercase)
+///
+/// On macOS, uses `scutil --get LocalHostName` which returns the stable Bonjour
+/// hostname that doesn't change based on network/DHCP. Falls back to the system
+/// hostname if LocalHostName is not available.
+///
+/// On other platforms, uses the system hostname directly.
 pub fn get_hostname() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        // Try to get LocalHostName first (stable Bonjour name)
+        if let Ok(output) = std::process::Command::new("scutil")
+            .args(["--get", "LocalHostName"])
+            .output()
+        {
+            if output.status.success() {
+                let name = String::from_utf8_lossy(&output.stdout)
+                    .trim()
+                    .to_lowercase();
+                if !name.is_empty() {
+                    return name;
+                }
+            }
+        }
+    }
+
+    // Fallback to system hostname
     hostname::get()
         .map(|h| h.to_string_lossy().to_lowercase())
         .unwrap_or_else(|_| "unknown".to_string())
