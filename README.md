@@ -168,6 +168,7 @@ SSH key items in Proton Pass should have the following fields:
 | **Host** | Yes | The SSH host (IP or hostname) |
 | **Username** | No | SSH username |
 | **Aliases** | No | Comma-separated host aliases |
+| **Command** | No | Custom SSH command (maps to `ProxyCommand` in SSH config, `ssh_command` in rclone) |
 
 ### Machine-Specific Keys
 

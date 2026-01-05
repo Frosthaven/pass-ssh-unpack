@@ -228,6 +228,9 @@ impl SshManager {
         if let Some(ref username) = item.username {
             config_block.push_str(&format!("\n    User {}", username));
         }
+        if let Some(ref command) = item.command {
+            config_block.push_str(&format!("\n    ProxyCommand {}", command));
+        }
         self.new_hosts.insert(sanitized_host.clone(), config_block);
 
         // Build alias entries
@@ -257,6 +260,9 @@ impl SshManager {
             }
             if let Some(ref username) = item.username {
                 alias_block.push_str(&format!("\n    User {}", username));
+            }
+            if let Some(ref command) = item.command {
+                alias_block.push_str(&format!("\n    ProxyCommand {}", command));
             }
             self.new_hosts.insert(sanitized_alias, alias_block);
         }
@@ -291,6 +297,7 @@ impl SshManager {
             user: item.username.clone().unwrap_or_default(),
             key_file: rclone_key_file,
             other_aliases,
+            ssh_command: item.command.clone(),
         }))
     }
 

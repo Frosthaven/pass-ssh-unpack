@@ -66,6 +66,7 @@ pub struct SshItem {
     pub host: Option<String>,
     pub username: Option<String>,
     pub aliases: Option<String>,
+    pub command: Option<String>,
 }
 
 impl ProtonPass {
@@ -128,6 +129,7 @@ impl ProtonPass {
                 let host = Self::get_field(&item.content.extra_fields, "Host");
                 let username = Self::get_field(&item.content.extra_fields, "Username");
                 let aliases = Self::get_field(&item.content.extra_fields, "Aliases");
+                let command = Self::get_field(&item.content.extra_fields, "Command");
 
                 SshItem {
                     title: item.content.title,
@@ -136,6 +138,7 @@ impl ProtonPass {
                     host,
                     username,
                     aliases,
+                    command,
                 }
             })
             .collect();
