@@ -48,16 +48,39 @@ impl InMemoryConfig {
     /// The password must already be set in RCLONE_CONFIG_PASS if config is encrypted.
     fn new(original_path: PathBuf, was_encrypted: bool, always_encrypt: bool) -> Result<Self> {
         // Capture the password (if any)
-        let password = std::env::var("RCLONE_CONFIG_PASS").ok();
+        let mut password = std::env::var("RCLONE_CONFIG_PASS").ok();
 
         // Export decrypted config to memory
-        let output = Command::new("rclone")
+        let mut output = Command::new("rclone")
             .args(["config", "show"])
             .output()
             .context("Failed to run rclone config show")?;
 
+        // Handle encryption password prompt if needed
         if !output.status.success() {
-            anyhow::bail!("Failed to decrypt rclone config");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.contains("unable to decrypt") || stderr.contains("RCLONE_CONFIG_PASS") {
+                eprint!("Rclone config password: ");
+                let pass_input =
+                    rpassword::read_password().context("Failed to read rclone password")?;
+
+                if pass_input.is_empty() {
+                    anyhow::bail!("No password provided for encrypted rclone config");
+                }
+
+                std::env::set_var("RCLONE_CONFIG_PASS", &pass_input);
+                password = Some(pass_input);
+
+                output = Command::new("rclone")
+                    .args(["config", "show"])
+                    .output()
+                    .context("Failed to run rclone config show (retry)")?;
+            }
+        }
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("Failed to decrypt rclone config: {}", stderr.trim());
         }
 
         let content = String::from_utf8_lossy(&output.stdout).into_owned();
@@ -97,6 +120,9 @@ impl InMemoryConfig {
         }
 
         if self.modified {
+            // Sort managed remotes alphabetically
+            sort_managed_remotes(&mut self.content);
+
             // Write decrypted content to the config file
             fs::write(&self.original_path, &self.content)
                 .context("Failed to write rclone config")?;
@@ -114,7 +140,7 @@ impl InMemoryConfig {
     }
 
     /// Encrypt the rclone config with the given password.
-    fn encrypt_config(password: &str, config_path: &PathBuf) -> Result<()> {
+    fn encrypt_config(password: &str, config_path: &std::path::Path) -> Result<()> {
         // We need to pass the password to rclone. Using stdin would be ideal
         // but rclone config encryption set doesn't support it well.
         // Use a pipe on Unix or a temporary approach that minimizes exposure.
@@ -266,12 +292,13 @@ pub fn sync_remotes(
 
     // Determine if we should use in-memory config (encrypted or always_encrypt)
     let was_encrypted = is_config_encrypted();
-    let has_password = std::env::var("RCLONE_CONFIG_PASS").is_ok();
+    let _has_password = std::env::var("RCLONE_CONFIG_PASS").is_ok();
     let always_encrypt = config.rclone.always_encrypt && !dry_run;
-    let use_in_memory = was_encrypted || (always_encrypt && has_password);
+    // Always use in-memory config for reliable manipulation and sorting
+    let use_in_memory = true;
     let original_config_path = get_config_path()?;
 
-    // Load config into memory if needed
+    // Load config into memory
     let mut in_memory_config = if use_in_memory {
         let spinner_msg = if was_encrypted {
             "Decrypting rclone config..."
@@ -350,7 +377,11 @@ pub fn sync_remotes(
     let mut skipped_unmanaged: Vec<String> = Vec::new();
 
     // Check what needs creating/updating
-    for (name, desired) in &desired_remotes {
+    let mut desired_names: Vec<_> = desired_remotes.keys().collect();
+    desired_names.sort();
+
+    for name in desired_names {
+        let desired = &desired_remotes[name];
         if let Some(existing) = current_config.get(name) {
             // Check if it's managed by us
             if existing.description.as_deref() != Some("managed by pass-ssh-unpack") {
@@ -591,9 +622,10 @@ pub fn purge_managed_remotes(config: &Config, dry_run: bool, quiet: bool) -> Res
 
     // Determine if we should use in-memory config
     let was_encrypted = is_config_encrypted();
-    let has_password = std::env::var("RCLONE_CONFIG_PASS").is_ok();
+    let _has_password = std::env::var("RCLONE_CONFIG_PASS").is_ok();
     let always_encrypt = config.rclone.always_encrypt && !dry_run;
-    let use_in_memory = was_encrypted || (always_encrypt && has_password);
+    // Always use in-memory config for reliable manipulation
+    let use_in_memory = true;
     let original_config_path = get_config_path()?;
 
     // Load config into memory if needed (for reading current state)
@@ -661,6 +693,8 @@ pub fn purge_managed_remotes(config: &Config, dry_run: bool, quiet: bool) -> Res
         if let Some(ref mut cfg) = in_memory_config {
             delete_remote_in_memory(cfg.content_mut(), name);
         } else {
+            // This fallback shouldn't really be reached with use_in_memory=true always,
+            // but kept for safety if logic changes
             delete_remote_via_rclone(name)?;
         }
     }
@@ -741,11 +775,9 @@ fn remote_matches(existing: &RcloneRemote, desired: &DesiredRemote) -> bool {
             existing.remote_type == "sftp"
                 && existing.host.as_deref() == Some(host)
                 && existing.user.as_deref() == Some(user)
-                && existing.key_file.as_ref().map(|s| s.as_str())
-                    == key_file.as_ref().map(|s| s.as_str())
-                && existing.ssh.as_ref().map(|s| s.as_str()) == ssh.as_ref().map(|s| s.as_str())
-                && existing.server_command.as_ref().map(|s| s.as_str())
-                    == server_command.as_ref().map(|s| s.as_str())
+                && existing.key_file.as_deref() == key_file.as_deref()
+                && existing.ssh.as_deref() == ssh.as_deref()
+                && existing.server_command.as_deref() == server_command.as_deref()
         }
         DesiredRemote::Alias { target } => {
             existing.remote_type == "alias"
@@ -1011,4 +1043,97 @@ fn fields_to_remote(fields: &HashMap<String, String>) -> Option<RcloneRemote> {
         ssh: fields.get("ssh").cloned(),
         server_command: fields.get("server_command").cloned(),
     })
+}
+
+/// Sort managed remotes in the INI content alphabetically.
+/// Unmanaged remotes are kept at the top (or wherever they were relative to others),
+/// but effectively we just group managed ones and sort them.
+///
+/// Current strategy:
+/// 1. Parse all sections with their full text.
+/// 2. Separate into "managed" and "unmanaged".
+/// 3. Sort "managed" by section name.
+/// 4. Reconstruct content: unmanaged first, then managed.
+fn sort_managed_remotes(content: &mut String) {
+    let mut sections: Vec<(String, String, bool)> = Vec::new(); // (name, full_text, is_managed)
+    let mut current_section_name: Option<String> = None;
+    let mut current_section_lines: Vec<String> = Vec::new();
+    let mut current_is_managed = false;
+
+    // Helper to push the current accumulated section
+    let mut push_section = |name: Option<String>, lines: Vec<String>, managed: bool| {
+        if let Some(n) = name {
+            let text = lines.join("\n");
+            sections.push((n, text, managed));
+        } else if !lines.is_empty() {
+            // Content before the first section (e.g. comments at top of file)
+            // We treat this as an "unmanaged" block with empty name
+            let text = lines.join("\n");
+            sections.push((String::new(), text, false));
+        }
+    };
+
+    for line in content.lines() {
+        if line.trim().starts_with('[') && line.trim().ends_with(']') {
+            // New section starting, push previous one
+            push_section(
+                current_section_name,
+                current_section_lines.clone(),
+                current_is_managed,
+            );
+
+            // Start new section
+            let trimmed = line.trim();
+            current_section_name = Some(trimmed[1..trimmed.len() - 1].to_string());
+            current_section_lines = vec![line.to_string()];
+            current_is_managed = false;
+        } else {
+            // Check if this line marks it as managed
+            if line.contains("description = managed by pass-ssh-unpack") {
+                current_is_managed = true;
+            }
+            current_section_lines.push(line.to_string());
+        }
+    }
+
+    // Push final section
+    push_section(
+        current_section_name,
+        current_section_lines,
+        current_is_managed,
+    );
+
+    // Separate
+    let mut managed: Vec<_> = sections.iter().filter(|s| s.2).cloned().collect();
+    let unmanaged: Vec<_> = sections.iter().filter(|s| !s.2).cloned().collect();
+
+    // Sort managed
+    managed.sort_by(|a, b| a.0.cmp(&b.0));
+
+    // Reconstruct
+    // We put unmanaged first (keeping their original relative order), then managed
+    *content = String::new();
+
+    for (_, text, _) in unmanaged {
+        content.push_str(&text);
+        content.push('\n');
+    }
+
+    for (_, text, _) in managed {
+        // Ensure there's a blank line before each section if not at very start
+        if !content.is_empty() && !content.ends_with("\n\n") && !content.ends_with('\n') {
+            content.push('\n');
+            // content.push('\n'); // Optional: force blank line between sections
+        }
+        content.push_str(&text);
+        content.push('\n');
+    }
+
+    // Clean up multiple newlines at end
+    while content.ends_with("\n\n") {
+        content.pop();
+    }
+    if !content.ends_with('\n') && !content.is_empty() {
+        content.push('\n');
+    }
 }

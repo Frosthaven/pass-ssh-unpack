@@ -189,7 +189,7 @@ fn run() -> Result<()> {
                 }
 
                 // Check machine-specific suffix
-                if let Some(suffix) = item.title.split('/').last() {
+                if let Some(suffix) = item.title.split('/').next_back() {
                     if item.title.contains('/') {
                         let suffix_lower = suffix.to_lowercase();
                         if suffix_lower != current_hostname.to_lowercase() {

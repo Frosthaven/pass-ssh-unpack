@@ -21,8 +21,7 @@ pub fn sanitize_name(name: &str) -> String {
     };
     sanitize_filename::sanitize_with_options(name, opts)
         .replace(' ', "_")
-        .replace('(', "")
-        .replace(')', "")
+        .replace(['(', ')'], "")
 }
 
 const CONFIG_HEADER: &str = r#"# =============================================================================
@@ -290,6 +289,17 @@ impl SshManager {
         } else {
             (sanitize_name(&item.title), String::new())
         };
+
+        // Check if this is a valid entry for rclone/ssh:
+        // Must have at least one of:
+        // 1. A key file (private_key was present and generated)
+        // 2. An SSH command ("ssh" field)
+        // 3. A server command ("server_command" field)
+        let is_valid = has_key || item.ssh.is_some() || item.server_command.is_some();
+
+        if !is_valid {
+            return Ok(None);
+        }
 
         Ok(Some(RcloneEntry {
             remote_name,
