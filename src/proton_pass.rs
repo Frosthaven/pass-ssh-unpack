@@ -66,7 +66,8 @@ pub struct SshItem {
     pub host: Option<String>,
     pub username: Option<String>,
     pub aliases: Option<String>,
-    pub command: Option<String>,
+    pub ssh: Option<String>,
+    pub server_command: Option<String>,
     pub jump: Option<String>,
 }
 
@@ -130,7 +131,8 @@ impl ProtonPass {
                 let host = Self::get_field(&item.content.extra_fields, "Host");
                 let username = Self::get_field(&item.content.extra_fields, "Username");
                 let aliases = Self::get_field(&item.content.extra_fields, "Aliases");
-                let command = Self::get_field(&item.content.extra_fields, "Command");
+                let ssh = Self::get_field(&item.content.extra_fields, "SSH");
+                let server_command = Self::get_field(&item.content.extra_fields, "Server Command");
                 let jump = Self::get_field(&item.content.extra_fields, "Jump");
 
                 SshItem {
@@ -140,7 +142,8 @@ impl ProtonPass {
                     host,
                     username,
                     aliases,
-                    command,
+                    ssh,
+                    server_command,
                     jump,
                 }
             })

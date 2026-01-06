@@ -297,7 +297,8 @@ impl SshManager {
             user: item.username.clone().unwrap_or_default(),
             key_file: rclone_key_file,
             other_aliases,
-            ssh: item.command.clone(),
+            ssh: item.ssh.clone(),
+            server_command: item.server_command.clone(),
         }))
     }
 

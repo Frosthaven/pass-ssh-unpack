@@ -169,7 +169,8 @@ SSH key items in Proton Pass should have the following fields:
 | **Username** | No | SSH username |
 | **Aliases** | No | Comma-separated host aliases |
 | **Jump** | No | Jump host for SSH config (`ProxyJump` directive) |
-| **Command** | No | Custom SSH binary/command for rclone (`ssh` option) |
+| **SSH** | No | Custom SSH binary/command for rclone (`ssh` option) |
+| **Server Command** | No | SFTP server command for rclone (`server_command` option) |
 
 ### Jump Hosts and Custom SSH Commands
 
@@ -178,13 +179,18 @@ SSH key items in Proton Pass should have the following fields:
 - Generated SSH config: `ProxyJump bastion.example.com`
 - This field only affects SSH config, not rclone.
 
-**Command** is used for rclone's `ssh` option - specify the full SSH command:
-- Example: `Command = tsh ssh` (for Teleport)
-- Example: `Command = ssh -J bastion.example.com` (for jump host support in rclone)
-- Generated rclone config: `ssh = tsh ssh`
+**SSH** is used for rclone's `ssh` option - specify the full SSH command:
+- Example: `SSH = tsh ssh --proxy=example.com --user=username` (for Teleport)
+- Example: `SSH = ssh -J bastion.example.com` (for jump host support in rclone)
+- Generated rclone config: `ssh = tsh ssh --proxy=example.com --user=username`
 - This field only affects rclone, not SSH config.
 
-Note: These fields are independent. Use Jump for standard SSH jump hosts, and Command when rclone needs a custom SSH binary or options.
+**Server Command** is used for rclone's `server_command` option - specify the SFTP server path:
+- Example: `Server Command = /usr/lib/openssh/sftp-server`
+- Generated rclone config: `server_command = /usr/lib/openssh/sftp-server`
+- This is useful when using custom SSH commands that don't support the SFTP subsystem.
+
+Note: These fields are independent. Use Jump for standard SSH jump hosts, SSH when rclone needs a custom SSH binary or options, and Server Command when rclone needs to explicitly invoke the SFTP server.
 
 ### Machine-Specific Keys
 
