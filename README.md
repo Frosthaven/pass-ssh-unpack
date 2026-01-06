@@ -180,9 +180,9 @@ SSH key items in Proton Pass should have the following fields:
 - This field only affects SSH config, not rclone.
 
 **SSH** is used for rclone's `ssh` option - specify the full SSH command:
-- Example: `SSH = tsh ssh --proxy=example.com --user=username` (for Teleport)
+- Example: `SSH = tsh ssh --proxy=teleport.example.com --user=alice root@myserver` (for Teleport)
 - Example: `SSH = ssh -J bastion.example.com` (for jump host support in rclone)
-- Generated rclone config: `ssh = tsh ssh --proxy=example.com --user=username`
+- Generated rclone config: `ssh = tsh ssh --proxy=teleport.example.com --user=alice root@myserver`
 - This field only affects rclone, not SSH config.
 
 **Server Command** is used for rclone's `server_command` option - specify the SFTP server path:
