@@ -13,7 +13,7 @@ use crate::proton_pass::ProtonPass;
 #[derive(Debug, Clone)]
 pub struct RcloneEntry {
     pub remote_name: String,
-    pub host: String,
+    pub host: Option<String>,
     pub user: String,
     pub key_file: String,
     pub other_aliases: String,
@@ -750,7 +750,7 @@ pub fn purge_managed_remotes(config: &Config, dry_run: bool, quiet: bool) -> Res
 #[derive(Debug, Clone)]
 enum DesiredRemote {
     Sftp {
-        host: String,
+        host: Option<String>,
         user: String,
         key_file: Option<String>,
         ssh: Option<String>,
@@ -792,8 +792,8 @@ fn remote_matches(existing: &RcloneRemote, desired: &DesiredRemote) -> bool {
             server_command,
         } => {
             existing.remote_type == "sftp"
-                && existing.host.as_deref() == Some(host)
-                && existing.user.as_deref() == Some(user)
+                && existing.host.as_deref() == host.as_deref()
+                && existing.user.as_deref() == Some(user.as_str())
                 && existing.key_file.as_deref() == key_file.as_deref()
                 && existing.ssh.as_deref() == ssh.as_deref()
                 && existing.server_command.as_deref() == server_command.as_deref()
@@ -822,13 +822,15 @@ fn create_remote_in_memory(content: &mut String, name: &str, desired: &DesiredRe
             ssh,
             server_command,
         } => {
-            let mut s = format!(
-                "[{}]\ntype = sftp\nhost = {}\nuser = {}\n",
-                name, host, user
-            );
+            let mut s = format!("[{}]\ntype = sftp\n", name);
+            if let Some(h) = host {
+                s.push_str(&format!("host = {}\n", h));
+            }
+            s.push_str(&format!("user = {}\n", user));
             if let Some(kf) = key_file {
                 s.push_str(&format!("key_file = {}\n", kf));
-            } else {
+            } else if host.is_some() {
+                // Only ask for password if connecting to a host directly
                 s.push_str("ask_password = true\n");
             }
             if let Some(cmd) = ssh {
@@ -867,12 +869,15 @@ fn create_remote_via_rclone(name: &str, desired: &DesiredRemote) -> Result<()> {
             server_command,
         } => {
             cmd.args(["config", "create", name, "sftp"]);
-            cmd.arg(format!("host={}", host));
+            if let Some(h) = host {
+                cmd.arg(format!("host={}", h));
+            }
             cmd.arg(format!("user={}", user));
 
             if let Some(kf) = key_file {
                 cmd.arg(format!("key_file={}", kf));
-            } else {
+            } else if host.is_some() {
+                // Only ask for password if connecting to a host directly
                 cmd.arg("ask_password=true");
             }
 

@@ -92,7 +92,7 @@ impl SshManager {
     }
 
     /// Process an SSH item, extracting keys and building config entries
-    /// Returns an RcloneEntry if successful and has a host field
+    /// Returns an RcloneEntry if successful
     pub fn process_item(
         &mut self,
         proton_pass: &ProtonPass,
@@ -100,13 +100,16 @@ impl SshManager {
         item: &SshItem,
         log: &impl Fn(&str),
     ) -> Result<Option<RcloneEntry>> {
-        let host_field = match &item.host {
-            Some(h) => h.clone(),
-            None => {
-                log("    -> skipped (no Host field)");
-                return Ok(None);
-            }
-        };
+        // Host field is optional if ssh or server_command is provided
+        let host_field = item.host.clone().unwrap_or_default();
+        let has_host = !host_field.is_empty();
+        let has_ssh_command = item.ssh.is_some() || item.server_command.is_some();
+
+        // Skip if no host AND no ssh command (nothing to connect to)
+        if !has_host && !has_ssh_command {
+            log("    -> skipped (no Host or ssh command)");
+            return Ok(None);
+        }
 
         // Sanitize title for filename
         let safe_title = sanitize_name(&item.title);
@@ -215,22 +218,29 @@ impl SshManager {
             log(&format!("    -> {} (no key, password auth)", safe_title));
         }
 
-        // Build config entries
-        let sanitized_host = sanitize_name(&host_field);
-        let mut config_block = format!("Host {}", sanitized_host);
-        if has_key {
-            config_block.push_str(&format!(
-                "\n    IdentityFile \"{}\"\n    IdentitiesOnly yes",
-                identity_path
-            ));
+        // Build SSH config entries only if we have a host
+        let sanitized_host = if has_host {
+            sanitize_name(&host_field)
+        } else {
+            String::new()
+        };
+
+        if has_host {
+            let mut config_block = format!("Host {}", sanitized_host);
+            if has_key {
+                config_block.push_str(&format!(
+                    "\n    IdentityFile \"{}\"\n    IdentitiesOnly yes",
+                    identity_path
+                ));
+            }
+            if let Some(ref username) = item.username {
+                config_block.push_str(&format!("\n    User {}", username));
+            }
+            if let Some(ref jump) = item.jump {
+                config_block.push_str(&format!("\n    ProxyJump {}", jump));
+            }
+            self.new_hosts.insert(sanitized_host.clone(), config_block);
         }
-        if let Some(ref username) = item.username {
-            config_block.push_str(&format!("\n    User {}", username));
-        }
-        if let Some(ref jump) = item.jump {
-            config_block.push_str(&format!("\n    ProxyJump {}", jump));
-        }
-        self.new_hosts.insert(sanitized_host.clone(), config_block);
 
         // Build alias entries
         let aliases_list: Vec<String> = if let Some(ref aliases) = item.aliases {
@@ -243,27 +253,30 @@ impl SshManager {
             vec![item.title.clone()]
         };
 
-        for alias_entry in &aliases_list {
-            if alias_entry == &host_field {
-                continue;
-            }
+        // Only add alias entries to SSH config if we have a host to alias
+        if has_host {
+            for alias_entry in &aliases_list {
+                if alias_entry == &host_field {
+                    continue;
+                }
 
-            let sanitized_alias = sanitize_name(alias_entry);
-            let mut alias_block =
-                format!("# Alias of {}\nHost {}", sanitized_host, sanitized_alias);
-            if has_key {
-                alias_block.push_str(&format!(
-                    "\n    IdentityFile \"{}\"\n    IdentitiesOnly yes",
-                    identity_path
-                ));
+                let sanitized_alias = sanitize_name(alias_entry);
+                let mut alias_block =
+                    format!("# Alias of {}\nHost {}", sanitized_host, sanitized_alias);
+                if has_key {
+                    alias_block.push_str(&format!(
+                        "\n    IdentityFile \"{}\"\n    IdentitiesOnly yes",
+                        identity_path
+                    ));
+                }
+                if let Some(ref username) = item.username {
+                    alias_block.push_str(&format!("\n    User {}", username));
+                }
+                if let Some(ref jump) = item.jump {
+                    alias_block.push_str(&format!("\n    ProxyJump {}", jump));
+                }
+                self.new_hosts.insert(sanitized_alias, alias_block);
             }
-            if let Some(ref username) = item.username {
-                alias_block.push_str(&format!("\n    User {}", username));
-            }
-            if let Some(ref jump) = item.jump {
-                alias_block.push_str(&format!("\n    ProxyJump {}", jump));
-            }
-            self.new_hosts.insert(sanitized_alias, alias_block);
         }
 
         // Build rclone entry
@@ -303,7 +316,7 @@ impl SshManager {
 
         Ok(Some(RcloneEntry {
             remote_name,
-            host: host_field,
+            host: if has_host { Some(host_field) } else { None },
             user: item.username.clone().unwrap_or_default(),
             key_file: rclone_key_file,
             other_aliases,
