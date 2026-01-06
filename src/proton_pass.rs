@@ -93,7 +93,12 @@ impl ProtonPass {
         let response: VaultListResponse = serde_json::from_slice(&output.stdout)
             .context("Failed to parse vault list response")?;
 
-        Ok(response.vaults.into_iter().map(|v| v.name).collect())
+        Ok(response
+            .vaults
+            .into_iter()
+            .map(|v| v.name)
+            .filter(|name| name != "Trash")
+            .collect())
     }
 
     /// List SSH key items in a vault
@@ -105,6 +110,8 @@ impl ProtonPass {
                 vault,
                 "--filter-type",
                 "ssh-key",
+                "--filter-state",
+                "active",
                 "--output",
                 "json",
             ])
