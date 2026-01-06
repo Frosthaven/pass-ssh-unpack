@@ -411,25 +411,6 @@ pub fn sync_remotes(
         }
     }
 
-    // Finalize in-memory config (write to disk and re-encrypt)
-    // We do this even if no ops were performed, to ensure sorting is enforced
-    if let Some(ref mut cfg) = in_memory_config {
-        let spinner_msg = if cfg.should_encrypt() {
-            "Encrypting rclone config..."
-        } else {
-            "Saving rclone config..."
-        };
-        let spinner = if !quiet {
-            Some(progress::spinner(spinner_msg))
-        } else {
-            None
-        };
-        cfg.finalize()?;
-        if let Some(sp) = spinner {
-            sp.finish_and_clear();
-        }
-    }
-
     // Calculate totals for progress
     let total_ops = to_delete.len() + to_create.len() + to_update.len();
 
