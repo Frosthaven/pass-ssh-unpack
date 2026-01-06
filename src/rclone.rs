@@ -350,7 +350,11 @@ pub fn sync_remotes(
     let mut skipped_unmanaged: Vec<String> = Vec::new();
 
     // Check what needs creating/updating
-    for (name, desired) in &desired_remotes {
+    let mut desired_names: Vec<_> = desired_remotes.keys().collect();
+    desired_names.sort();
+
+    for name in desired_names {
+        let desired = &desired_remotes[name];
         if let Some(existing) = current_config.get(name) {
             // Check if it's managed by us
             if existing.description.as_deref() != Some("managed by pass-ssh-unpack") {
