@@ -3,6 +3,9 @@ use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+/// Default rclone password path in Proton Pass (fallback when not configured)
+pub const DEFAULT_RCLONE_PASSWORD_PATH: &str = "pass://Personal/rclone/password";
+
 /// When to sync public keys back to Proton Pass
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default, ValueEnum)]
 #[serde(rename_all = "snake_case")]
@@ -85,7 +88,7 @@ pub struct RcloneConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
 
-    #[serde(default)]
+    #[serde(default = "default_rclone_password_path")]
     pub password_path: String,
 
     #[serde(default)]
@@ -100,11 +103,15 @@ fn default_true() -> bool {
     true
 }
 
+fn default_rclone_password_path() -> String {
+    DEFAULT_RCLONE_PASSWORD_PATH.to_string()
+}
+
 impl Default for RcloneConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            password_path: String::new(),
+            password_path: default_rclone_password_path(),
             always_encrypt: false,
         }
     }

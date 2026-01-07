@@ -59,4 +59,33 @@ pub struct Args {
     /// Force rclone config encryption after operations
     #[arg(long)]
     pub always_encrypt: bool,
+
+    /// Import SSH entries from Teleport (tsh) login
+    #[arg(long)]
+    pub from_tsh: bool,
+
+    /// Skip scanning remote servers for sftp-server path (use default)
+    #[arg(long)]
+    pub no_scan: bool,
+}
+
+impl Args {
+    /// Check if the user provided any meaningful flags (non-interactive mode)
+    pub fn has_flags(&self) -> bool {
+        !self.vault.is_empty()
+            || !self.item.is_empty()
+            || self.full
+            || self.quiet
+            || self.ssh
+            || self.rclone
+            || self.purge
+            || self.dry_run
+            || self.config.is_some()
+            || self.output_dir.is_some()
+            || self.sync_public_key.is_some()
+            || self.rclone_password_path.is_some()
+            || self.always_encrypt
+            || self.from_tsh
+            || self.no_scan
+    }
 }

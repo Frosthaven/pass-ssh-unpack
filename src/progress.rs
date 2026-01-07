@@ -38,3 +38,15 @@ pub fn rclone_progress_bar(len: u64) -> ProgressBar {
     );
     pb
 }
+
+/// Create a progress bar for Teleport node processing
+pub fn node_progress_bar(len: u64) -> ProgressBar {
+    let pb = ProgressBar::new(len);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("Processing Nodes [{bar:20.cyan/dim}] {pos}/{len} {msg}")
+            .unwrap()
+            .progress_chars("━━─"),
+    );
+    pb
+}

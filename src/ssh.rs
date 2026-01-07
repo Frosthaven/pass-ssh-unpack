@@ -214,6 +214,8 @@ impl SshManager {
                     }
                 }
             }
+        } else if item.ssh.is_some() {
+            log(&format!("    -> {} (rclone only)", safe_title));
         } else {
             log(&format!("    -> {} (no key, password auth)", safe_title));
         }
