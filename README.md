@@ -15,6 +15,7 @@ A utility for unpacking SSH keys and generating SSH/rclone configurations from P
 
 ## Features
 
+- **Interactive mode**: Menu-driven interface when run without arguments
 - **Cross-platform**: Works on Linux, macOS, and Windows
 - **Automatic SSH config generation**: Creates host entries with aliases
 - **Machine-specific keys**: Filter keys by hostname suffix (e.g., `github/my-laptop`)
@@ -60,6 +61,20 @@ ln -s "$(pwd)/target/release/pass-ssh-unpack" ~/.local/bin/pass-ssh-unpack
 ```
 
 ## Quick Start
+
+### Interactive Mode
+
+Run without arguments for a menu-driven interface:
+
+```bash
+pass-ssh-unpack
+```
+
+The interactive menu provides options to:
+- Export Proton Pass SSH keys to local machine
+- Import Teleport nodes into Proton Pass
+- View current status (managed keys, remotes, locations)
+- Purge managed resources
 
 ### Proton Pass
 

@@ -1,6 +1,6 @@
 [package]
 name = "pass-ssh-unpack"
-version = "0.5.4"
+version = "0.6.0"
 authors = ["Shane Stanley <shane@thedragon.dev>"]
 edition = "2021"
 description = "A utility for unpacking proton's pass-cli ssh keys into usable ssh and rclone configurations."
@@ -31,6 +31,7 @@ rpassword = "7"
 indicatif = "0.18"
 url = "2"
 tempfile = "3"
+inquire = "0.9"
 
 [profile.release]
 lto = true

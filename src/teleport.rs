@@ -33,23 +33,28 @@ impl Teleport {
         Self
     }
 
-    /// Check if tsh is logged in, return status info
+    /// Check if tsh is logged in and return status info.
+    /// Returns an error if not logged in.
     pub fn get_status(&self) -> Result<TeleportActive> {
+        self.try_get_status()?
+            .ok_or_else(|| anyhow::anyhow!("Not logged into Teleport. Run 'tsh login' first."))
+    }
+
+    /// Try to get status without prompting for login
+    fn try_get_status(&self) -> Result<Option<TeleportActive>> {
         let output = Command::new("tsh")
             .args(["status", "--format=json"])
             .output()
             .context("Failed to execute tsh status")?;
 
         if !output.status.success() {
-            bail!("Not logged into Teleport. Run 'tsh login' first.");
+            return Ok(None);
         }
 
         let response: TeleportStatusResponse =
             serde_json::from_slice(&output.stdout).context("Failed to parse tsh status output")?;
 
-        response
-            .active
-            .ok_or_else(|| anyhow::anyhow!("Not logged into Teleport. Run 'tsh login' first."))
+        Ok(response.active)
     }
 
     /// Extract proxy address from profile_url

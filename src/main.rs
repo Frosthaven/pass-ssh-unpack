@@ -1,6 +1,7 @@
 mod cli;
 mod config;
 mod error;
+mod interactive;
 mod platform;
 mod progress;
 mod proton_pass;
@@ -15,6 +16,7 @@ use std::collections::HashSet;
 use cli::Args;
 use config::Config;
 use error::ErrorCollector;
+use interactive::{ExportMode, InteractiveAction, PurgeMode};
 use proton_pass::ProtonPass;
 use rclone::RcloneEntry;
 use ssh::SshManager;
@@ -30,11 +32,36 @@ fn main() {
 fn run() -> Result<()> {
     let args = Args::parse();
 
+    // If no flags provided, try interactive mode
+    if !args.has_flags() {
+        if interactive::is_interactive() {
+            return run_interactive_mode();
+        } else {
+            // Not a TTY - show help instead
+            eprintln!("No arguments provided and not running in an interactive terminal.");
+            eprintln!();
+            eprintln!("Usage: pass-ssh-unpack [OPTIONS]");
+            eprintln!();
+            eprintln!("Quick examples:");
+            eprintln!("  pass-ssh-unpack --vault Personal          # Export from a vault");
+            eprintln!("  pass-ssh-unpack --from-tsh --vault Teleport  # Import from Teleport");
+            eprintln!("  pass-ssh-unpack --help                    # Show all options");
+            eprintln!();
+            eprintln!("For interactive mode, run in a standard terminal (bash/zsh).");
+            return Ok(());
+        }
+    }
+
     // Handle --from-tsh mode (separate workflow)
     if args.from_tsh {
         return handle_from_tsh(&args);
     }
 
+    // Handle export mode (default)
+    run_export(&args)
+}
+
+fn run_export(args: &Args) -> Result<()> {
     let mut errors = ErrorCollector::new();
     let dry_run = args.dry_run;
 
@@ -427,11 +454,20 @@ fn handle_from_tsh(args: &Args) -> Result<()> {
     };
 
     let teleport = Teleport::new();
-    let status = teleport.get_status()?;
-
-    if let Some(sp) = spinner {
-        sp.finish_and_clear();
-    }
+    let status = match teleport.get_status() {
+        Ok(s) => {
+            if let Some(sp) = spinner {
+                sp.finish_and_clear();
+            }
+            s
+        }
+        Err(e) => {
+            if let Some(sp) = spinner {
+                sp.finish_and_clear();
+            }
+            return Err(e);
+        }
+    };
 
     log(&format!(
         "Logged in to {} as {}",
@@ -589,4 +625,91 @@ fn handle_from_tsh(args: &Args) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn run_interactive_mode() -> Result<()> {
+    loop {
+        match interactive::run_interactive()? {
+            InteractiveAction::Cancelled => {
+                println!();
+                println!("Thanks for using pass-ssh-unpack!");
+                return Ok(());
+            }
+            InteractiveAction::ViewedStatus => {
+                // Just loop back to menu
+                continue;
+            }
+            InteractiveAction::ImportTeleport {
+                vault,
+                item_pattern,
+                scan_remotes,
+                dry_run,
+            } => {
+                println!();
+                // Build args for handle_from_tsh
+                let mut args = Args::parse_from(["pass-ssh-unpack"]);
+                args.from_tsh = true;
+                args.vault = vec![vault];
+                args.no_scan = !scan_remotes;
+                args.dry_run = dry_run;
+                if let Some(pattern) = item_pattern {
+                    args.item = vec![pattern];
+                }
+                if let Err(e) = handle_from_tsh(&args) {
+                    eprintln!("Error: {:#}", e);
+                }
+                println!();
+                // Loop back to menu
+            }
+            InteractiveAction::ExportLocal {
+                mode,
+                vaults,
+                item_pattern,
+                full,
+                dry_run,
+            } => {
+                println!();
+                // Build args for run_export
+                let mut args = Args::parse_from(["pass-ssh-unpack"]);
+                args.dry_run = dry_run;
+                args.full = full;
+                args.vault = vaults;
+
+                match mode {
+                    ExportMode::SshOnly => args.ssh = true,
+                    ExportMode::RcloneOnly => args.rclone = true,
+                    ExportMode::Both => {}
+                }
+
+                if let Some(pattern) = item_pattern {
+                    args.item = vec![pattern];
+                }
+
+                if let Err(e) = run_export(&args) {
+                    eprintln!("Error: {:#}", e);
+                }
+                println!();
+                // Loop back to menu
+            }
+            InteractiveAction::Purge { mode, dry_run } => {
+                println!();
+                // Build args for handle_purge
+                let mut args = Args::parse_from(["pass-ssh-unpack"]);
+                args.purge = true;
+                args.dry_run = dry_run;
+
+                match mode {
+                    PurgeMode::SshOnly => args.ssh = true,
+                    PurgeMode::RcloneOnly => args.rclone = true,
+                    PurgeMode::Both => {}
+                }
+
+                if let Err(e) = run_export(&args) {
+                    eprintln!("Error: {:#}", e);
+                }
+                println!();
+                // Loop back to menu
+            }
+        }
+    }
 }

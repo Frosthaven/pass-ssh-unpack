@@ -5,7 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::config::Config;
+use crate::config::{Config, DEFAULT_RCLONE_PASSWORD_PATH};
 use crate::progress;
 use crate::proton_pass::ProtonPass;
 
@@ -109,7 +109,8 @@ impl InMemoryConfig {
 
     /// Determine if we should encrypt on finalize
     fn should_encrypt(&self) -> bool {
-        // Encrypt if: (was encrypted) OR (always_encrypt AND we have a password)
+        // Always re-encrypt if: we have a password AND (was encrypted OR always_encrypt is set)
+        // This ensures we never leave a previously-encrypted config unencrypted
         self.password.is_some() && (self.was_encrypted || self.always_encrypt)
     }
 
@@ -262,8 +263,14 @@ pub fn sync_remotes(
         println!("Syncing rclone remotes...");
     }
 
-    // Set rclone password: password_path -> env var
-    if !config.rclone.password_path.is_empty() {
+    // Set rclone password: check env first, then password_path -> env var
+    if std::env::var("RCLONE_CONFIG_PASS").is_err() {
+        let password_path = if config.rclone.password_path.is_empty() {
+            DEFAULT_RCLONE_PASSWORD_PATH
+        } else {
+            &config.rclone.password_path
+        };
+
         let spinner = if !quiet {
             Some(progress::spinner("Loading rclone password..."))
         } else {
@@ -271,7 +278,7 @@ pub fn sync_remotes(
         };
 
         let proton_pass = ProtonPass::new();
-        match proton_pass.get_item_field(&config.rclone.password_path) {
+        match proton_pass.get_item_field(password_path) {
             Ok(password) => {
                 std::env::set_var("RCLONE_CONFIG_PASS", password);
                 if let Some(sp) = spinner {
@@ -607,10 +614,16 @@ pub fn purge_managed_remotes(config: &Config, dry_run: bool, quiet: bool) -> Res
         return Ok(());
     }
 
-    // Set rclone password
-    if !config.rclone.password_path.is_empty() {
+    // Set rclone password: check env first, then password_path -> env var
+    if std::env::var("RCLONE_CONFIG_PASS").is_err() {
+        let password_path = if config.rclone.password_path.is_empty() {
+            DEFAULT_RCLONE_PASSWORD_PATH
+        } else {
+            &config.rclone.password_path
+        };
+
         let proton_pass = ProtonPass::new();
-        if let Ok(password) = proton_pass.get_item_field(&config.rclone.password_path) {
+        if let Ok(password) = proton_pass.get_item_field(password_path) {
             std::env::set_var("RCLONE_CONFIG_PASS", password);
         } else {
             if !quiet {
