@@ -29,6 +29,8 @@ hostname = "0.4"
 sanitize-filename = "0.6"
 rpassword = "7"
 indicatif = "0.18"
+url = "2"
+tempfile = "3"
 
 [profile.release]
 lto = true

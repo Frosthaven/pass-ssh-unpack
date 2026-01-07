@@ -37,12 +37,33 @@ pub struct ItemContent {
 pub struct ItemData {
     #[serde(rename = "SshKey")]
     pub ssh_key: Option<SshKeyData>,
+    #[serde(rename = "Custom")]
+    pub custom: Option<CustomData>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct SshKeyData {
     pub private_key: Option<String>,
     pub public_key: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CustomData {
+    #[serde(default)]
+    pub sections: Vec<CustomSection>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CustomSection {
+    pub section_name: String,
+    #[serde(default)]
+    pub section_fields: Vec<SectionField>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SectionField {
+    pub name: String,
+    pub content: FieldContent,
 }
 
 #[derive(Debug, Deserialize)]
@@ -159,6 +180,76 @@ impl ProtonPass {
         Ok(items)
     }
 
+    /// List custom items with "Teleport Rclone Config" section in a vault
+    pub fn list_teleport_items(&self, vault: &str) -> Result<Vec<SshItem>> {
+        let output = Command::new("pass-cli")
+            .args([
+                "item",
+                "list",
+                vault,
+                "--filter-type",
+                "custom",
+                "--filter-state",
+                "active",
+                "--output",
+                "json",
+            ])
+            .output()
+            .context("Failed to execute pass-cli item list")?;
+
+        // Empty vault or no custom items returns non-zero or empty output
+        if !output.status.success() || output.stdout.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let response: ItemListResponse =
+            serde_json::from_slice(&output.stdout).context("Failed to parse item list response")?;
+
+        let items = response
+            .items
+            .into_iter()
+            .filter_map(|item| {
+                // Check if this is a Teleport item by looking for the section
+                let custom = item.content.content.custom?;
+                let teleport_section = custom
+                    .sections
+                    .iter()
+                    .find(|s| s.section_name == "Teleport Rclone Config")?;
+
+                // Extract fields from the section
+                let ssh = Self::get_section_field(&teleport_section.section_fields, "SSH");
+                let server_command =
+                    Self::get_section_field(&teleport_section.section_fields, "Server Command");
+
+                // Only include if we have at least SSH or Server Command
+                if ssh.is_none() && server_command.is_none() {
+                    return None;
+                }
+
+                Some(SshItem {
+                    title: item.content.title,
+                    private_key: None,
+                    public_key: None,
+                    host: None,
+                    username: None,
+                    aliases: None,
+                    ssh,
+                    server_command,
+                    jump: None,
+                })
+            })
+            .collect();
+
+        Ok(items)
+    }
+
+    /// List all processable items in a vault (SSH keys + Teleport custom items)
+    pub fn list_all_items(&self, vault: &str) -> Result<Vec<SshItem>> {
+        let mut items = self.list_ssh_keys(vault)?;
+        items.extend(self.list_teleport_items(vault)?);
+        Ok(items)
+    }
+
     /// Get a field value from a pass URI (e.g., pass://Vault/Item/password)
     pub fn get_item_field(&self, path: &str) -> Result<String> {
         let output = Command::new("pass-cli")
@@ -211,7 +302,134 @@ impl ProtonPass {
         Ok(())
     }
 
+    /// Check if a vault exists by name
+    pub fn vault_exists(&self, name: &str) -> Result<bool> {
+        let vaults = self.list_vaults()?;
+        Ok(vaults.iter().any(|v| v == name))
+    }
+
+    /// List all active item titles in a vault (any type)
+    pub fn list_item_titles(&self, vault: &str) -> Result<Vec<String>> {
+        let output = Command::new("pass-cli")
+            .args([
+                "item",
+                "list",
+                vault,
+                "--filter-state",
+                "active",
+                "--output",
+                "json",
+            ])
+            .output()
+            .context("Failed to execute pass-cli item list")?;
+
+        // Empty vault returns non-zero or empty output
+        if !output.status.success() || output.stdout.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let response: ItemListResponse =
+            serde_json::from_slice(&output.stdout).context("Failed to parse item list response")?;
+
+        Ok(response
+            .items
+            .into_iter()
+            .map(|item| item.content.title)
+            .collect())
+    }
+
+    /// Create a new vault
+    pub fn create_vault(&self, name: &str) -> Result<()> {
+        let output = Command::new("pass-cli")
+            .args(["vault", "create", "--name", name])
+            .output()
+            .context("Failed to execute pass-cli vault create")?;
+
+        if !output.status.success() {
+            anyhow::bail!(
+                "Failed to create vault '{}': {}",
+                name,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Create a custom item for Teleport with SSH and Server Command fields
+    pub fn create_tsh_item(
+        &self,
+        vault: &str,
+        title: &str,
+        ssh_command: &str,
+        server_command: &str,
+    ) -> Result<()> {
+        use std::io::Write;
+
+        // Build the JSON template
+        let template = serde_json::json!({
+            "title": title,
+            "note": "",
+            "sections": [
+                {
+                    "section_name": "Teleport Rclone Config",
+                    "fields": [
+                        {
+                            "field_name": "SSH",
+                            "field_type": "text",
+                            "value": ssh_command
+                        },
+                        {
+                            "field_name": "Server Command",
+                            "field_type": "text",
+                            "value": server_command
+                        }
+                    ]
+                }
+            ]
+        });
+
+        // Write template to a temp file
+        let mut temp_file =
+            tempfile::NamedTempFile::new().context("Failed to create temp file for template")?;
+        temp_file
+            .write_all(template.to_string().as_bytes())
+            .context("Failed to write template to temp file")?;
+
+        // Create custom item from template
+        let output = Command::new("pass-cli")
+            .args([
+                "item",
+                "create",
+                "custom",
+                "--vault-name",
+                vault,
+                "--from-template",
+                temp_file.path().to_str().unwrap(),
+            ])
+            .output()
+            .context("Failed to create custom item")?;
+
+        if !output.status.success() {
+            anyhow::bail!(
+                "Failed to create item '{}': {}",
+                title,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        Ok(())
+    }
+
     fn get_field(fields: &[ExtraField], name: &str) -> Option<String> {
+        fields
+            .iter()
+            .find(|f| f.name == name)
+            .and_then(|f| f.content.text.clone())
+            .filter(|s| !s.is_empty())
+    }
+
+    fn get_section_field(fields: &[SectionField], name: &str) -> Option<String> {
         fields
             .iter()
             .find(|f| f.name == name)

@@ -59,4 +59,12 @@ pub struct Args {
     /// Force rclone config encryption after operations
     #[arg(long)]
     pub always_encrypt: bool,
+
+    /// Import SSH entries from Teleport (tsh) login
+    #[arg(long)]
+    pub from_tsh: bool,
+
+    /// Skip scanning remote servers for sftp-server path (use default)
+    #[arg(long)]
+    pub no_scan: bool,
 }
