@@ -1,0 +1,37 @@
+# =============================================================================
+# Auto-Update PRs when main changes
+# =============================================================================
+# When main is updated (e.g., a PR is merged), this workflow automatically
+# updates all open PRs targeting main so they don't show "out of sync".
+# This eliminates the need to manually click "Update branch" on each PR.
+# =============================================================================
+
+name: Auto Update PRs
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  update-prs:
+    name: Update open PRs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update all open PRs targeting main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Fetching open PRs targeting main..."
+          PRS=$(gh pr list --repo ${{ github.repository }} --base main --state open --json number -q '.[].number')
+          
+          if [ -z "$PRS" ]; then
+            echo "No open PRs to update"
+            exit 0
+          fi
+          
+          for pr in $PRS; do
+            echo "Updating PR #$pr..."
+            gh pr update-branch $pr --repo ${{ github.repository }} || echo "Could not update PR #$pr (may have conflicts)"
+          done
+          
+          echo "Done updating PRs"
