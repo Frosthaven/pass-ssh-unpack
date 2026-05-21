@@ -135,6 +135,7 @@ impl ProtonPass {
                 "active",
                 "--output",
                 "json",
+                "--show-secrets",
             ])
             .output()
             .context("Failed to execute pass-cli item list")?;
@@ -193,6 +194,7 @@ impl ProtonPass {
                 "active",
                 "--output",
                 "json",
+                "--show-secrets",
             ])
             .output()
             .context("Failed to execute pass-cli item list")?;
@@ -319,6 +321,7 @@ impl ProtonPass {
                 "active",
                 "--output",
                 "json",
+                "--show-secrets",
             ])
             .output()
             .context("Failed to execute pass-cli item list")?;
